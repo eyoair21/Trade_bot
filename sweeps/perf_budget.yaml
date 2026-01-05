@@ -1,0 +1,22 @@
+# Performance budget configuration for regression detection
+# Used by traderbot.cli.regress to guard against quality/speed decay
+
+# Primary metric to track
+metric: sharpe
+mode: max
+
+# Success rate: fraction of runs that must complete successfully
+min_success_rate: 0.75
+
+# Timing budget: P90 elapsed time must be under this threshold (seconds)
+max_p90_elapsed_s: 60.0
+
+# Metric regression: maximum allowable drop vs baseline
+# If current best sharpe < baseline best sharpe - max_sharpe_drop, fail
+max_sharpe_drop: 0.05
+
+# Float tolerance for determinism checks
+epsilon_abs: 1e-6
+
+# Optional: timing percentile thresholds
+# max_p50_elapsed_s: 30.0  # Uncomment to also enforce P50

@@ -20,7 +20,7 @@ class TestSmokeTests:
 
     def test_version(self) -> None:
         """Test version is defined."""
-        assert __version__ == "0.1.0"
+        assert __version__ == "0.5.3"
 
     def test_config_loads(self) -> None:
         """Test configuration loads successfully."""

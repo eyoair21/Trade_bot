@@ -176,6 +176,7 @@ def load_current_data(sweep_dir: Path) -> CurrentData:
     # Load timing data
     timing = {"p50": 0.0, "p90": 0.0}
     timing_path = sweep_dir / "timings.csv"
+    used_fallback_timings = False
     if timing_path.exists():
         elapsed_times = []
         with open(timing_path, newline="") as f:

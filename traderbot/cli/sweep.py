@@ -42,7 +42,7 @@ def run_single_config(args: tuple[int, dict[str, Any], Path, bool]) -> dict[str,
     logger.info(f"Starting run {run_idx}: {config}")
 
     start_time = time.time()
-    
+
     # Enable per-run profiling if requested
     pr = None
     if enable_profiling:
@@ -333,6 +333,158 @@ def print_timing_summary(results: list[dict[str, Any]]) -> None:
     print(f"{'='*60}\n")
 
 
+def rerun_best_for_determinism(
+    best_run: dict[str, Any],
+    output_root: Path,
+    n_reruns: int,
+    metric: str,
+) -> dict[str, Any]:
+    """Rerun the best configuration N times to verify determinism.
+
+    Args:
+        best_run: Best run result from initial sweep.
+        output_root: Sweep output directory.
+        n_reruns: Number of times to rerun.
+        metric: Metric to check for determinism.
+
+    Returns:
+        Dictionary with determinism check results.
+    """
+    import numpy as np
+
+    # Map metric names to result keys
+    metric_keys = {
+        "sharpe": "avg_oos_sharpe",
+        "total_return": "avg_oos_return_pct",
+        "max_dd": "avg_oos_max_dd_pct",
+    }
+
+    key = metric_keys.get(metric, "avg_oos_sharpe")
+    config = best_run.get("_config", {})
+    original_value = best_run.get(key, 0.0)
+    original_seed = config.get("seed", 42)
+
+    logger.info(f"Running {n_reruns} determinism check(s) for best config")
+    logger.info(f"Original {metric}: {original_value:.6f}, seed: {original_seed}")
+
+    # Create determinism check directory
+    det_dir = output_root / "determinism_checks"
+    det_dir.mkdir(parents=True, exist_ok=True)
+
+    rerun_values = []
+    rerun_results = []
+
+    for i in range(n_reruns):
+        logger.info(f"Determinism rerun {i + 1}/{n_reruns}")
+
+        # Run with exact same config and seed (no run_idx offset)
+        run_output = det_dir / f"rerun_{i:03d}"
+        run_output.mkdir(parents=True, exist_ok=True)
+
+        start_time = time.time()
+
+        try:
+            wf_kwargs = {
+                "start_date": config.get("start_date"),
+                "end_date": config.get("end_date"),
+                "universe": config.get("universe", []),
+                "n_splits": config.get("n_splits", 3),
+                "is_ratio": config.get("is_ratio", 0.6),
+                "output_dir": run_output,
+                "universe_mode": config.get("universe_mode", "static"),
+                "sizer": config.get("sizer", "fixed"),
+                "seed": original_seed,  # Use exact same seed
+            }
+
+            # Add optional parameters
+            for param in [
+                "fixed_frac", "vol_target", "kelly_cap", "proba_threshold",
+                "opt_threshold", "train_per_split", "epochs"
+            ]:
+                if param in config:
+                    wf_kwargs[param] = config[param]
+
+            result = run_walkforward(**wf_kwargs)
+            elapsed = time.time() - start_time
+
+            rerun_value = result.get(key, 0.0)
+            rerun_values.append(rerun_value)
+
+            rerun_results.append({
+                "rerun_idx": i,
+                "metric_value": rerun_value,
+                "elapsed_seconds": elapsed,
+                "status": "success",
+            })
+
+            logger.info(f"Rerun {i + 1}: {metric}={rerun_value:.6f}, elapsed={elapsed:.1f}s")
+
+        except Exception as e:
+            elapsed = time.time() - start_time
+            logger.error(f"Determinism rerun {i + 1} failed: {e}")
+            rerun_results.append({
+                "rerun_idx": i,
+                "metric_value": None,
+                "elapsed_seconds": elapsed,
+                "status": "error",
+                "error": str(e),
+            })
+
+    # Calculate determinism statistics
+    if rerun_values:
+        all_values = [original_value] + rerun_values
+        max_abs_diff = float(np.max(np.abs(np.array(all_values) - original_value)))
+        mean_value = float(np.mean(all_values))
+        std_value = float(np.std(all_values))
+        is_deterministic = max_abs_diff < 1e-9  # Effectively zero diff
+    else:
+        max_abs_diff = float("nan")
+        mean_value = original_value
+        std_value = 0.0
+        is_deterministic = False
+
+    determinism_result = {
+        "metric": metric,
+        "metric_key": key,
+        "original_value": original_value,
+        "original_seed": original_seed,
+        "n_reruns": n_reruns,
+        "rerun_values": rerun_values,
+        "max_abs_diff": max_abs_diff,
+        "mean_value": mean_value,
+        "std_value": std_value,
+        "is_deterministic": is_deterministic,
+        "reruns": rerun_results,
+        "config": config,
+    }
+
+    # Write determinism.json
+    det_path = output_root / "determinism.json"
+    with open(det_path, "w") as f:
+        json.dump(determinism_result, f, indent=2, default=str)
+
+    logger.info(f"Determinism check results written to {det_path}")
+
+    # Print summary
+    print(f"\n{'='*60}")
+    print("Determinism Check Results:")
+    print(f"  Metric: {metric}")
+    print(f"  Original value: {original_value:.6f}")
+    print(f"  Reruns: {n_reruns}")
+    if rerun_values:
+        print(f"  Max absolute diff: {max_abs_diff:.2e}")
+        print(f"  Mean: {mean_value:.6f}, Std: {std_value:.2e}")
+        if is_deterministic:
+            print("  ✅ DETERMINISTIC (diff < 1e-9)")
+        else:
+            print("  ⚠️  NON-DETERMINISTIC (diff >= 1e-9)")
+    else:
+        print("  ❌ All reruns failed")
+    print(f"{'='*60}\n")
+
+    return determinism_result
+
+
 def main() -> None:
     """Main entry point for sweep CLI."""
     parser = argparse.ArgumentParser(
@@ -363,6 +515,13 @@ def main() -> None:
         "--profile",
         action="store_true",
         help="Enable detailed profiling of run phases",
+    )
+    parser.add_argument(
+        "--rerun-best",
+        type=int,
+        default=0,
+        metavar="N",
+        help="Rerun best config N times after sweep to verify determinism",
     )
 
     args = parser.parse_args()
@@ -403,6 +562,15 @@ def main() -> None:
         print(f"  {config.metric}: {best[key]:.4f}")
         print(f"  Config: {best['_config']}")
         print(f"{'='*60}\n")
+
+        # Run determinism check if requested
+        if args.rerun_best > 0:
+            rerun_best_for_determinism(
+                best_run=best,
+                output_root=config.output_root,
+                n_reruns=args.rerun_best,
+                metric=config.metric,
+            )
 
 
 if __name__ == "__main__":

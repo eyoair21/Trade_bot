@@ -796,6 +796,189 @@ unzip -l ci_smoke.zip
 
 ---
 
+## Phase 5.2: Performance Guards & Regression Detection
+
+Phase 5.2 adds automated performance regression detection to prevent silent degradation:
+
+### Performance Budget
+
+Define acceptable performance thresholds in `sweeps/perf_budget.yaml`:
+
+```yaml
+metric: sharpe
+mode: max
+min_success_rate: 0.75    # At least 75% of runs must succeed
+max_p90_elapsed_s: 60.0   # P90 timing must be under 60s
+max_sharpe_drop: 0.05     # Max 5% drop from baseline
+epsilon_abs: 1e-6         # Floating-point tolerance
+```
+
+### Baseline Management
+
+The baseline (`benchmarks/baseline.json`) tracks reference performance:
+
+```json
+{
+  "git_sha": "abc1234",
+  "created_utc": "2026-01-05T00:00:00+00:00",
+  "metric": "sharpe",
+  "mode": "max",
+  "summary": {
+    "best_metric": 1.5,
+    "success_rate": 1.0,
+    "total_runs": 10
+  },
+  "timing": {"p50": 10.0, "p90": 20.0}
+}
+```
+
+### Regression Check CLI
+
+Compare current sweep results against baseline:
+
+```bash
+# Run regression comparison
+python -m traderbot.cli.regress compare \
+    --current runs/sweeps/ci_smoke \
+    --baseline benchmarks/baseline.json \
+    --budget sweeps/perf_budget.yaml \
+    --out regression_report.md
+
+# Exit code: 0 = passed, 1 = failed
+
+# Use --no-emoji for CI environments or Windows cmd.exe
+python -m traderbot.cli.regress compare \
+    --current runs/sweeps/ci_smoke \
+    --baseline benchmarks/baseline.json \
+    --budget sweeps/perf_budget.yaml \
+    --no-emoji
+```
+
+You can also set the `TRADERBOT_NO_EMOJI` environment variable to disable emoji globally:
+
+```bash
+export TRADERBOT_NO_EMOJI=1
+python -m traderbot.cli.regress compare ...
+```
+
+Update baseline after verified improvements:
+
+```bash
+python -m traderbot.cli.regress update-baseline \
+    --current runs/sweeps/ci_smoke \
+    --out benchmarks/baseline.json \
+    --sha $(git rev-parse --short HEAD)
+```
+
+### Determinism Check
+
+Verify reproducibility by rerunning the best configuration:
+
+```bash
+# Rerun best config 3 times after sweep
+python -m traderbot.cli.sweep sweeps/ci_smoke.yaml --workers 2 --rerun-best 3
+
+# Output: determinism.json with:
+# - max_abs_diff: Maximum difference across runs
+# - is_deterministic: True if diff < 1e-9
+```
+
+### CI Integration
+
+**PR Workflow:**
+- Runs sweep and compares against baseline
+- Posts regression status as PR comment
+- Fails PR if regression detected
+
+**Nightly Workflow:**
+- Runs regression check with continue-on-error
+- Runs determinism check (1 rerun)
+- Uploads regression report as artifact
+- Generates baseline candidate on manual dispatch
+
+### Data Provenance
+
+When CSV files (`leaderboard.csv`, `timings.csv`) are missing, the regression CLI automatically
+derives metrics from `all_results.json`. A "Data Provenance" section is added to the report
+indicating which metrics were computed from fallback sources:
+
+```markdown
+### Data Provenance
+
+- `best_metric` derived from `all_results.json` (leaderboard.csv missing or empty)
+- Timing percentiles (P50/P90) derived from `all_results.json` (timings.csv missing)
+```
+
+This ensures regression checks work even with minimal sweep outputs.
+
+### Outputs
+
+Each regression check produces:
+- `regression_report.md` - Human-readable markdown report
+- `baseline_diff.json` - JSON with computed deltas
+- `determinism.json` - Reproducibility verification results
+
+### Phase 5.2 Verification
+
+```bash
+# Run sweep
+python -m traderbot.cli.sweep sweeps/ci_smoke.yaml --workers 2 --time
+
+# Generate leaderboard
+python -m traderbot.cli.leaderboard runs/sweeps/ci_smoke
+
+# Run regression check
+python -m traderbot.cli.regress compare \
+    --current runs/sweeps/ci_smoke \
+    --baseline benchmarks/baseline.json \
+    --budget sweeps/perf_budget.yaml
+
+# Run determinism check
+python -m traderbot.cli.sweep sweeps/ci_smoke.yaml --workers 1 --rerun-best 2
+```
+
+For more details, see [PHASE52_SUMMARY.md](PHASE52_SUMMARY.md).
+
+---
+
+## Troubleshooting
+
+### Windows Console Unicode Issues
+
+If the console crashes or displays garbled characters with Unicode/emoji:
+
+1. **Use `--no-emoji` flag:**
+   ```bash
+   python -m traderbot.cli.regress compare --no-emoji ...
+   ```
+
+2. **Set environment variable globally:**
+   ```bash
+   set TRADERBOT_NO_EMOJI=1
+   python -m traderbot.cli.regress compare ...
+   ```
+
+3. **Use Windows Terminal** (recommended):
+   - Windows Terminal handles UTF-8 better than cmd.exe
+   - Settings → Profiles → Defaults → Enable "Use Unicode UTF-8 for worldwide language support"
+
+4. **Set console encoding:**
+   ```bash
+   chcp 65001
+   python -m traderbot.cli.regress compare ...
+   ```
+
+### Common Issues
+
+| Issue | Solution |
+|-------|----------|
+| `ModuleNotFoundError: No module named 'traderbot'` | Ensure you're in the project root or install with `pip install -e .` |
+| Unicode errors on Windows | Use `--no-emoji` or set `TRADERBOT_NO_EMOJI=1` |
+| Tests fail with subprocess errors | Check that PYTHONPATH includes the project root |
+| Coverage below 70% | Run `pytest --cov-report=html` to identify untested code |
+
+---
+
 ## License
 
 MIT License - See LICENSE file for details.

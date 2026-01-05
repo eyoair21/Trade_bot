@@ -11,13 +11,12 @@ Usage:
 """
 
 import argparse
-import contextlib
 import json
-import os
 import subprocess
 import sys
 from pathlib import Path
 
+from traderbot.cli._console import _can_encode, _fmt, configure_windows_console
 from traderbot.logging_setup import get_logger
 from traderbot.metrics.compare import (
     compare_results,
@@ -30,41 +29,6 @@ from traderbot.metrics.compare import (
 )
 
 logger = get_logger("cli.regress")
-
-
-def _can_encode(s: str) -> bool:
-    """Check if string can be encoded with current stdout encoding.
-
-    Args:
-        s: String to check.
-
-    Returns:
-        True if encodable, False otherwise.
-    """
-    try:
-        encoding = sys.stdout.encoding or "utf-8"
-        s.encode(encoding, errors="strict")
-        return True
-    except Exception:
-        return False
-
-
-def _fmt(s: str, ascii_fallback: str, use_emoji: bool) -> str:
-    """Format string with emoji fallback to ASCII.
-
-    Args:
-        s: String with emoji.
-        ascii_fallback: ASCII fallback string.
-        use_emoji: Whether to attempt emoji.
-
-    Returns:
-        Formatted string (emoji if possible, ASCII otherwise).
-    """
-    if not use_emoji:
-        return ascii_fallback
-    if _can_encode(s):
-        return s
-    return ascii_fallback
 
 
 def get_git_sha() -> str:
@@ -279,9 +243,7 @@ def main() -> None:
     args = parser.parse_args()
 
     # Try to improve Windows console encoding (best-effort)
-    if os.name == "nt":
-        with contextlib.suppress(Exception):
-            sys.stdout.reconfigure(encoding="utf-8")
+    configure_windows_console()
 
     if args.command == "compare":
         sys.exit(cmd_compare(args))

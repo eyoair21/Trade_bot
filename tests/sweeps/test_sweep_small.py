@@ -293,7 +293,7 @@ class TestSweepRunner:
                 "avg_oos_max_dd_pct": -2.0,
             }
 
-            result = run_single_config((0, config, tmp_path))
+            result = run_single_config((0, config, tmp_path, False))
 
             assert result["_status"] == "success"
             assert result["_run_idx"] == 0
@@ -308,7 +308,7 @@ class TestSweepRunner:
         with patch("traderbot.cli.sweep.run_walkforward") as mock_wf:
             mock_wf.side_effect = ValueError("Test error")
 
-            result = run_single_config((0, config, tmp_path))
+            result = run_single_config((0, config, tmp_path, False))
 
             assert result["_status"] == "error"
             assert "Test error" in result["error"]

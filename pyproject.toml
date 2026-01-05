@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "traderbot"
-version = "0.1.0"
+version = "0.5.3"
 description = "Paper-trading research bot with deterministic runs, basic strategy, and risk scaffolding"
 authors = ["Trading Team <trading@example.com>"]
 readme = "README.md"

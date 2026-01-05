@@ -77,6 +77,10 @@ def pack_sweep(
         "leaderboard.csv",
         "leaderboard.md",
         "timings.csv",
+        # Regression guard artifacts
+        "regression_report.md",
+        "baseline_diff.json",
+        "determinism.json",
     ]
 
     # Load leaderboard to determine top runs

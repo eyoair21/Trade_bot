@@ -1,0 +1,25 @@
+{
+  "git_sha": "initial",
+  "created_utc": "2026-01-05T00:00:00+00:00",
+  "metric": "sharpe",
+  "mode": "max",
+  "leaderboard": [
+    {
+      "rank": 1,
+      "run_idx": 0,
+      "avg_oos_sharpe": 0.0,
+      "avg_oos_return_pct": 0.0,
+      "avg_oos_max_dd_pct": 0.0,
+      "total_oos_trades": 0
+    }
+  ],
+  "timing": {
+    "p50": 10.0,
+    "p90": 20.0
+  },
+  "summary": {
+    "best_metric": 0.0,
+    "success_rate": 1.0,
+    "total_runs": 1
+  }
+}

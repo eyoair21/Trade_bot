@@ -27,13 +27,43 @@ def build_report(
     # Header
     lines.append("# Walk-Forward Analysis Report")
     lines.append("")
-    lines.append(f"**Period:** {results['start_date']} to {results['end_date']}")
-    lines.append(f"**Universe:** {', '.join(results['universe'])}")
-    lines.append(f"**Universe Mode:** {results['universe_mode']}")
-    lines.append(f"**Splits:** {results['n_splits']} (IS ratio: {results['is_ratio']})")
-    lines.append(f"**Position Sizer:** {results.get('sizer', 'fixed')}")
-    lines.append(f"**Train Per Split:** {results.get('train_per_split', False)}")
-    lines.append("")
+    
+    # Run Manifest section
+    if "manifest" in results:
+        manifest = results["manifest"]
+        lines.append("## Run Manifest")
+        lines.append("")
+        lines.append("| Parameter | Value |")
+        lines.append("|-----------|-------|")
+        lines.append(f"| Run ID | `{manifest.get('run_id', 'N/A')}` |")
+        lines.append(f"| Git SHA | `{manifest.get('git_sha', 'unknown')}` |")
+        lines.append(f"| Seed | `{manifest.get('seed', 42)}` |")
+        lines.append(f"| Start Date | {manifest.get('start_date', 'N/A')} |")
+        lines.append(f"| End Date | {manifest.get('end_date', 'N/A')} |")
+        lines.append(f"| Universe | {', '.join(manifest.get('universe', []))} |")
+        lines.append(f"| Splits | {manifest.get('n_splits', 0)} |")
+        lines.append(f"| IS Ratio | {manifest.get('is_ratio', 0.0)} |")
+        lines.append(f"| Sizer | {manifest.get('sizer', 'fixed')} |")
+        
+        # Sizer params
+        sizer_params = manifest.get('sizer_params', {})
+        if sizer_params:
+            params_str = ", ".join(f"{k}={v}" for k, v in sizer_params.items())
+            lines.append(f"| Sizer Params | {params_str} |")
+        
+        lines.append(f"| Data Digest | `{manifest.get('data_digest', 'N/A')}` |")
+        lines.append("")
+    else:
+        # Fallback to old format
+        lines.append(f"**Period:** {results['start_date']} to {results['end_date']}")
+        lines.append(f"**Universe:** {', '.join(results['universe'])}")
+        lines.append(f"**Universe Mode:** {results['universe_mode']}")
+        lines.append(f"**Splits:** {results['n_splits']} (IS ratio: {results['is_ratio']})")
+        lines.append(f"**Position Sizer:** {results.get('sizer', 'fixed')}")
+        lines.append(f"**Train Per Split:** {results.get('train_per_split', False)}")
+        if "seed" in results:
+            lines.append(f"**Seed:** {results['seed']}")
+        lines.append("")
 
     # Summary metrics
     lines.append("## Summary Metrics")

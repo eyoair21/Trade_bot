@@ -7,6 +7,7 @@ Supports per-split model training and calibration.
 import argparse
 import json
 import platform
+import random
 import subprocess
 import sys
 from datetime import UTC, date, datetime
@@ -30,6 +31,7 @@ from traderbot.engine.risk import RiskManager
 from traderbot.engine.strategy_momo import MomentumStrategy
 from traderbot.logging_setup import get_logger, setup_logging
 from traderbot.metrics.calibration import compute_calibration
+from traderbot.reports.run_manifest import create_run_manifest, to_jsonable as manifest_to_jsonable
 
 logger = get_logger("cli.walkforward")
 
@@ -84,8 +86,8 @@ def get_git_sha() -> str:
     return "unknown"
 
 
-def create_run_manifest() -> dict[str, Any]:
-    """Create run manifest with environment info."""
+def create_env_manifest() -> dict[str, Any]:
+    """Create environment manifest with system info."""
     return {
         "timestamp": datetime.now(UTC).isoformat(),
         "git_sha": get_git_sha(),
@@ -167,6 +169,7 @@ def run_walkforward(
     kelly_cap: float = 0.25,
     proba_threshold: float = 0.5,
     opt_threshold: bool = False,
+    seed: int = 42,
 ) -> dict[str, Any]:
     """Run walk-forward analysis.
 
@@ -192,14 +195,24 @@ def run_walkforward(
         kelly_cap: Kelly cap for position sizing.
         proba_threshold: Probability threshold for trading decisions.
         opt_threshold: Whether to optimize threshold per split.
+        seed: Random seed for reproducibility.
 
     Returns:
         Results dictionary.
     """
     config = get_config()
 
-    # Set random seed
-    np.random.seed(config.random_seed)
+    # Set random seed for reproducibility
+    random.seed(seed)
+    np.random.seed(seed)
+    
+    # Set torch seed if available (optional dependency)
+    try:
+        import torch
+        torch.manual_seed(seed)
+        torch.use_deterministic_algorithms(True, warn_only=True)
+    except ImportError:
+        pass  # torch not installed, skip
 
     # Parse dates
     start_dt = datetime.fromisoformat(start_date)
@@ -211,12 +224,17 @@ def run_walkforward(
     if lookback is None:
         lookback = config.model.lookback
 
-    # Create output directory
+    # Create output directory and run_id
     if output_dir is None:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_dir = config.runs_dir / timestamp
+        run_id = datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
+        output_dir = config.runs_dir / run_id.replace(":", "-").replace("T", "_")
+    else:
+        run_id = output_dir.name
 
     output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Get git SHA
+    git_sha = get_git_sha()
 
     # Create models directory for per-split training
     models_dir = output_dir / "models"
@@ -445,8 +463,55 @@ def run_walkforward(
             ec["split"] = i + 1
             all_equity_curves.append(ec)
 
+    # Create run manifest
+    sizer_params = {
+        "fixed_frac": fixed_frac,
+        "vol_target": vol_target,
+        "kelly_cap": kelly_cap,
+    }
+    
+    all_cli_params = {
+        "start_date": start_date,
+        "end_date": end_date,
+        "universe": universe,
+        "n_splits": n_splits,
+        "is_ratio": is_ratio,
+        "universe_mode": universe_mode,
+        "train_per_split": train_per_split,
+        "epochs": epochs,
+        "batch_size": batch_size,
+        "learning_rate": learning_rate,
+        "val_split": val_split,
+        "features": features,
+        "lookback": lookback,
+        "sizer": sizer,
+        "fixed_frac": fixed_frac,
+        "vol_target": vol_target,
+        "kelly_cap": kelly_cap,
+        "proba_threshold": proba_threshold,
+        "opt_threshold": opt_threshold,
+        "seed": seed,
+    }
+    
+    manifest = create_run_manifest(
+        run_id=run_id,
+        git_sha=git_sha,
+        seed=seed,
+        start_date=start_date,
+        end_date=end_date,
+        universe=universe,
+        n_splits=n_splits,
+        is_ratio=is_ratio,
+        sizer=sizer,
+        sizer_params=sizer_params,
+        all_cli_params=all_cli_params,
+    )
+    
     # Aggregate results
     aggregate = {
+        "run_id": run_id,
+        "git_sha": git_sha,
+        "seed": seed,
         "start_date": start_date,
         "end_date": end_date,
         "universe": universe,
@@ -461,6 +526,7 @@ def run_walkforward(
         "total_oos_trades": sum(s["oos_trades"] for s in split_results),
         "execution_costs": total_costs,
         "total_execution_costs": sum(total_costs.values()),
+        "manifest": manifest.to_dict(),
         "splits": split_results,
     }
 
@@ -488,10 +554,16 @@ def run_walkforward(
     combined_equity.to_csv(equity_path, index=False)
     logger.info(f"Equity curve saved to {equity_path}")
 
+    # Save run manifest
     manifest_path = output_dir / "run_manifest.json"
     with open(manifest_path, "w") as f:
-        json.dump(_to_jsonable(create_run_manifest()), f, indent=2)
+        json.dump(manifest_to_jsonable(manifest), f, indent=2)
     logger.info(f"Manifest saved to {manifest_path}")
+    
+    # Save environment manifest for backward compatibility
+    env_manifest_path = output_dir / "env_manifest.json"
+    with open(env_manifest_path, "w") as f:
+        json.dump(_to_jsonable(create_env_manifest()), f, indent=2)
 
     # Generate report
     from traderbot.reports.report_builder import build_report
@@ -697,8 +769,26 @@ Examples:
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
         help="Log level (default: INFO)",
     )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Random seed for reproducibility (default: 42)",
+    )
 
     args = parser.parse_args()
+    
+    # Set all random seeds at the start for reproducibility
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    
+    # Set torch seed if available (optional dependency)
+    try:
+        import torch
+        torch.manual_seed(args.seed)
+        torch.use_deterministic_algorithms(True, warn_only=True)
+    except ImportError:
+        pass  # torch not installed, skip
 
     # Parse features
     features = None
@@ -732,6 +822,7 @@ Examples:
             kelly_cap=args.kelly_cap,
             proba_threshold=args.proba_threshold,
             opt_threshold=args.opt_threshold,
+            seed=args.seed,
         )
 
         if "error" in results:

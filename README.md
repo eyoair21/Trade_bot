@@ -357,6 +357,138 @@ make demo2
 
 ---
 
+## Phase 4: Reproducibility & Run Comparisons
+
+Phase 4 adds deterministic runs and run comparison tools:
+
+### Deterministic Runs with Seed
+
+Control randomness for reproducible results:
+
+```bash
+# Run with specific seed
+poetry run python -m traderbot.cli.walkforward \
+    --start-date 2023-01-10 --end-date 2023-03-31 \
+    --universe AAPL MSFT NVDA \
+    --n-splits 3 --is-ratio 0.6 \
+    --seed 123
+
+# Run again with same seed - results will be identical
+poetry run python -m traderbot.cli.walkforward \
+    --start-date 2023-01-10 --end-date 2023-03-31 \
+    --universe AAPL MSFT NVDA \
+    --n-splits 3 --is-ratio 0.6 \
+    --seed 123
+```
+
+The `--seed` parameter controls:
+- Python's `random` module
+- NumPy's random number generator
+- PyTorch's random number generator (if installed)
+
+### Run Manifest
+
+Every run creates a `run_manifest.json` file with complete reproducibility information:
+
+```json
+{
+  "run_id": "2026-01-05T12-30-45",
+  "git_sha": "abc1234",
+  "seed": 123,
+  "params": { /* all CLI parameters */ },
+  "universe": ["AAPL", "MSFT", "NVDA"],
+  "start_date": "2023-01-10",
+  "end_date": "2023-03-31",
+  "n_splits": 3,
+  "is_ratio": 0.6,
+  "sizer": "fixed",
+  "sizer_params": {
+    "fixed_frac": 0.1,
+    "vol_target": 0.2,
+    "kelly_cap": 0.25
+  },
+  "data_digest": "a1b2c3d4e5f6g7h8"
+}
+```
+
+The manifest is also included in `results.json` and displayed at the top of `report.md`.
+
+### Compare Two Runs
+
+Compare performance between two backtest runs:
+
+```bash
+# Compare two runs using Sharpe ratio
+poetry run python -m traderbot.cli.compare_runs \
+    --a runs/run_seed123 \
+    --b runs/run_seed456 \
+    --metric sharpe
+
+# Compare using total return
+poetry run python -m traderbot.cli.compare_runs \
+    --a runs/run_seed123 \
+    --b runs/run_seed456 \
+    --metric total_return \
+    --out runs/my_comparison.md
+
+# Compare using max drawdown (lower is better)
+poetry run python -m traderbot.cli.compare_runs \
+    --a runs/run_seed123 \
+    --b runs/run_seed456 \
+    --metric max_dd
+```
+
+**Available metrics:**
+- `total_return` - Total percentage return
+- `sharpe` - Sharpe ratio (annualized)
+- `max_dd` - Maximum drawdown percentage
+
+The comparison generates a markdown report with:
+- Run details (manifest info, parameters)
+- Performance metrics side-by-side
+- Winner determination based on chosen metric
+
+### Phase 4 Verification
+
+```bash
+# Run two identical runs with same seed
+poetry run python -m traderbot.cli.walkforward \
+    --start-date 2023-01-10 --end-date 2023-03-31 \
+    --universe AAPL MSFT NVDA \
+    --n-splits 3 --is-ratio 0.6 \
+    --seed 123 \
+    --output-dir runs/seed123_a
+
+poetry run python -m traderbot.cli.walkforward \
+    --start-date 2023-01-10 --end-date 2023-03-31 \
+    --universe AAPL MSFT NVDA \
+    --n-splits 3 --is-ratio 0.6 \
+    --seed 123 \
+    --output-dir runs/seed123_b
+
+# Compare results (should be identical)
+poetry run python -m traderbot.cli.compare_runs \
+    --a runs/seed123_a \
+    --b runs/seed123_b \
+    --metric sharpe
+
+# Run with different seed
+poetry run python -m traderbot.cli.walkforward \
+    --start-date 2023-01-10 --end-date 2023-03-31 \
+    --universe AAPL MSFT NVDA \
+    --n-splits 3 --is-ratio 0.6 \
+    --seed 456 \
+    --output-dir runs/seed456
+
+# Compare different seeds
+poetry run python -m traderbot.cli.compare_runs \
+    --a runs/seed123_a \
+    --b runs/seed456 \
+    --metric sharpe
+```
+
+---
+
 ## License
 
 MIT License - See LICENSE file for details.

@@ -11,8 +11,8 @@ Usage:
 """
 
 import argparse
+import contextlib
 import json
-import locale
 import os
 import subprocess
 import sys
@@ -126,7 +126,7 @@ def cmd_compare(args: argparse.Namespace) -> int:
 
     # Generate report
     report = generate_regression_report(verdict, current, baseline, budget)
-    
+
     # Add provenance notes if fallbacks were used
     if current.used_fallback_leaderboard or current.used_fallback_timings:
         report += "\n### Data Provenance\n\n"
@@ -134,7 +134,7 @@ def cmd_compare(args: argparse.Namespace) -> int:
             report += "- `best_metric` derived from `all_results.json` (leaderboard.csv missing or empty)\n"
         if current.used_fallback_timings:
             report += "- Timing percentiles (P50/P90) derived from `all_results.json` (timings.csv missing)\n"
-    
+
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(report, encoding="utf-8")
     logger.info(f"Regression report written to {output_path}")
@@ -280,11 +280,8 @@ def main() -> None:
 
     # Try to improve Windows console encoding (best-effort)
     if os.name == "nt":
-        try:
+        with contextlib.suppress(Exception):
             sys.stdout.reconfigure(encoding="utf-8")
-        except Exception:
-            # Fallback gracefully if reconfigure fails
-            pass
 
     if args.command == "compare":
         sys.exit(cmd_compare(args))

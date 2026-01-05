@@ -4,10 +4,11 @@ Compares current sweep results against a baseline and performance budget
 to detect quality or speed regressions.
 """
 
+import contextlib
 import csv
 import json
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -180,10 +181,8 @@ def load_current_data(sweep_dir: Path) -> CurrentData:
         with open(timing_path, newline="") as f:
             reader = csv.DictReader(f)
             for row in reader:
-                try:
+                with contextlib.suppress(KeyError, ValueError):
                     elapsed_times.append(float(row["elapsed_s"]))
-                except (KeyError, ValueError):
-                    pass
 
         if elapsed_times:
             timing["p50"] = float(np.percentile(elapsed_times, 50))
@@ -210,7 +209,7 @@ def load_current_data(sweep_dir: Path) -> CurrentData:
         elapsed = [
             r.get("_elapsed_seconds")
             for r in all_results
-            if isinstance(r.get("_elapsed_seconds"), (int, float))
+            if isinstance(r.get("_elapsed_seconds"), int | float)
         ]
         if elapsed:
             timing["p50"] = float(np.percentile(elapsed, 50))
@@ -228,7 +227,7 @@ def load_current_data(sweep_dir: Path) -> CurrentData:
             r.get(metric_key)
             for r in all_results
             if r.get("_status") == "success"
-            and isinstance(r.get(metric_key), (int, float))
+            and isinstance(r.get(metric_key), int | float)
         ]
         if vals:
             best_metric = max(vals) if mode == "max" else min(vals)
@@ -321,13 +320,12 @@ def compare_results(
         )
 
     # Optional P50 check
-    if budget.max_p50_elapsed_s is not None:
-        if current.timing["p50"] > budget.max_p50_elapsed_s:
-            timing_passed = False
-            messages.append(
-                f"FAIL: P50 timing budget exceeded. "
-                f"P50={current.timing['p50']:.2f}s > max={budget.max_p50_elapsed_s}s"
-            )
+    if budget.max_p50_elapsed_s is not None and current.timing["p50"] > budget.max_p50_elapsed_s:
+        timing_passed = False
+        messages.append(
+            f"FAIL: P50 timing budget exceeded. "
+            f"P50={current.timing['p50']:.2f}s > max={budget.max_p50_elapsed_s}s"
+        )
 
     details["timing"] = {
         "current_p50": current.timing["p50"],
@@ -432,7 +430,7 @@ def generate_regression_report(
     status_badge = "✅ PASS" if verdict.passed else "❌ FAIL"
     lines.append(f"# Regression Report {status_badge}")
     lines.append("")
-    lines.append(f"**Generated:** {datetime.now(timezone.utc).isoformat()}")
+    lines.append(f"**Generated:** {datetime.now(UTC).isoformat()}")
     lines.append(f"**Baseline SHA:** `{baseline.git_sha}`")
     lines.append(f"**Baseline Created:** {baseline.created_utc}")
     lines.append("")
@@ -567,7 +565,7 @@ def generate_baseline_diff(
         Dictionary for baseline_diff.json.
     """
     return {
-        "generated_utc": datetime.now(timezone.utc).isoformat(),
+        "generated_utc": datetime.now(UTC).isoformat(),
         "passed": verdict.passed,
         "baseline_sha": baseline.git_sha,
         "baseline_created": baseline.created_utc,
@@ -610,7 +608,7 @@ def create_new_baseline(
     """
     return {
         "git_sha": git_sha,
-        "created_utc": datetime.now(timezone.utc).isoformat(),
+        "created_utc": datetime.now(UTC).isoformat(),
         "metric": "sharpe",
         "mode": "max",
         "leaderboard": current.leaderboard[:5],  # Top 5

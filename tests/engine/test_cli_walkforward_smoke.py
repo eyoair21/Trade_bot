@@ -116,10 +116,13 @@ class TestCLIWalkforwardSmoke:
         with open(manifest_path) as f:
             manifest = json.load(f)
 
-        assert "timestamp" in manifest
-        assert "python_version" in manifest
-        assert "os" in manifest
+        # New manifest format uses run_id instead of timestamp
+        assert "run_id" in manifest
         assert "git_sha" in manifest
+        assert "seed" in manifest
+        assert "universe" in manifest
+        assert "start_date" in manifest
+        assert "end_date" in manifest
 
     def test_walkforward_all_three_artifacts_exist(
         self, sample_data_dir: Path, output_dir: Path

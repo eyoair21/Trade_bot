@@ -1,5 +1,8 @@
 # TraderBot - Paper Trading Research Bot
 
+[![CI](https://github.com/eyoair21/Trade_bot/actions/workflows/ci.yml/badge.svg)](https://github.com/eyoair21/Trade_bot/actions/workflows/ci.yml)
+[![Nightly Sweep](https://github.com/eyoair21/Trade_bot/actions/workflows/nightly-sweep.yml/badge.svg)](https://github.com/eyoair21/Trade_bot/actions/workflows/nightly-sweep.yml)
+
 A clean, testable Python repository for paper-trading research with deterministic runs, basic momentum strategy, data/risk scaffolding, and CI.
 
 ## ⚠️ Safety Notes
@@ -485,6 +488,310 @@ poetry run python -m traderbot.cli.compare_runs \
     --a runs/seed123_a \
     --b runs/seed456 \
     --metric sharpe
+```
+
+---
+
+## Phase 3: Position Sizing, Execution Costs & Calibration
+
+Phase 3 adds production-ready features for realistic backtesting:
+
+### Position Sizing Policies
+
+Three position sizing strategies are available:
+
+```bash
+# Fixed fraction (default) - invest 10% of portfolio per signal
+poetry run python -m traderbot.cli.walkforward \
+    --start-date 2023-01-10 --end-date 2023-03-31 \
+    --universe AAPL MSFT NVDA \
+    --n-splits 3 --is-ratio 0.6 \
+    --sizer fixed \
+    --fixed-frac 0.10
+
+# Volatility targeting - target 15% annualized volatility per position
+poetry run python -m traderbot.cli.walkforward \
+    --start-date 2023-01-10 --end-date 2023-03-31 \
+    --universe AAPL MSFT NVDA \
+    --n-splits 3 --is-ratio 0.6 \
+    --sizer vol \
+    --vol-target 0.15
+
+# Kelly criterion - size by edge with max 25% cap
+poetry run python -m traderbot.cli.walkforward \
+    --start-date 2023-01-10 --end-date 2023-03-31 \
+    --universe AAPL MSFT NVDA \
+    --n-splits 3 --is-ratio 0.6 \
+    --sizer kelly \
+    --kelly-cap 0.25
+```
+
+### Probability Thresholding
+
+Filter signals by model confidence:
+
+```bash
+# Only act on signals with >55% probability
+poetry run python -m traderbot.cli.walkforward \
+    --start-date 2023-01-10 --end-date 2023-03-31 \
+    --universe AAPL MSFT NVDA \
+    --n-splits 3 --is-ratio 0.6 \
+    --proba-threshold 0.55
+
+# Optimize threshold per split using F1 score
+poetry run python -m traderbot.cli.walkforward \
+    --start-date 2023-01-10 --end-date 2023-03-31 \
+    --universe AAPL MSFT NVDA \
+    --n-splits 3 --is-ratio 0.6 \
+    --opt-threshold
+```
+
+### Execution Cost Tracking
+
+Results now include realistic execution costs:
+- **Commission**: Per-trade commission costs
+- **Per-share fees**: SEC/FINRA fees
+- **Slippage**: Market impact estimation
+
+### Calibration Metrics
+
+When calibration is enabled, reports include:
+- **Brier Score**: Probability accuracy measure
+- **ECE**: Expected Calibration Error
+- **Optimal Threshold**: Best cutoff per split
+
+### Phase 3 Demo
+
+```bash
+# Full Phase 3 demo with position sizing and thresholding
+make demo3
+```
+
+---
+
+## Phase 5: Hyperparameter Sweeps & Leaderboard
+
+Phase 5 adds YAML-driven hyperparameter sweeps with parallel execution and automated result aggregation.
+
+### Sweep Configuration
+
+Create a YAML file to define your sweep:
+
+```yaml
+# sweeps/my_sweep.yaml
+name: sizer_comparison
+output_root: runs/sweep_sizers
+metric: sharpe
+mode: max
+
+fixed_args:
+  start_date: "2023-01-10"
+  end_date: "2023-03-31"
+  universe:
+    - AAPL
+    - MSFT
+    - NVDA
+  n_splits: 3
+  is_ratio: 0.6
+  seed: 42
+
+grid:
+  sizer:
+    - fixed
+    - vol
+  proba_threshold:
+    - 0.50
+    - 0.55
+    - 0.60
+```
+
+### Running Sweeps
+
+```bash
+# Run sweep with 4 parallel workers
+python -m traderbot.cli.sweep sweeps/my_sweep.yaml --workers 4
+
+# Preview sweep without running
+python -m traderbot.cli.sweep sweeps/my_sweep.yaml --dry-run
+```
+
+Output structure:
+```
+runs/sweep_sizers/
+├── sweep_meta.json      # Sweep configuration
+├── all_results.json     # All run results
+├── run_000/            # Individual run outputs
+│   ├── results.json
+│   ├── report.md
+│   └── equity_curve.csv
+├── run_001/
+└── ...
+```
+
+### Generating Leaderboards
+
+```bash
+# Generate leaderboard from sweep
+python -m traderbot.cli.leaderboard runs/sweep_sizers
+
+# Export best run to a separate directory
+python -m traderbot.cli.leaderboard runs/sweep_sizers --export-best runs/best_run
+
+# Export specific rank (e.g., 3rd best)
+python -m traderbot.cli.leaderboard runs/sweep_sizers \
+    --export-rank 3 \
+    --export-dir runs/third_best
+```
+
+Generated files:
+- `leaderboard.csv` - Full rankings in CSV format
+- `leaderboard.md` - Markdown report with top runs
+
+### Example Sweep Configs
+
+Two example configurations are provided:
+
+**Fixed vs Vol Sizer Comparison:**
+```bash
+python -m traderbot.cli.sweep sweeps/example_fixed_vs_vol.yaml --workers 4
+```
+
+**Threshold Optimization:**
+```bash
+python -m traderbot.cli.sweep sweeps/example_threshold.yaml --workers 2
+```
+
+### Phase 5 Verification
+
+```bash
+# Run a small sweep
+python -m traderbot.cli.sweep sweeps/example_threshold.yaml --workers 2
+
+# Generate and view leaderboard
+python -m traderbot.cli.leaderboard runs/sweep_threshold
+
+# Export best configuration
+python -m traderbot.cli.leaderboard runs/sweep_threshold --export-best runs/best_threshold
+```
+
+---
+
+## Phase 5.1: CI, Artifacts, and Profiling
+
+Phase 5.1 adds continuous integration, artifact management, and performance profiling:
+
+### CI/CD Workflows
+
+**Lint & Test CI:**
+- Runs on every push and PR to main
+- Tests on Ubuntu and Windows with Python 3.11 and 3.12
+- Enforces 70% code coverage
+- Uploads coverage artifacts on failure
+
+**Nightly Sweep:**
+- Runs daily at 03:17 UTC
+- Executes smoke test sweep (4 configurations)
+- Generates leaderboard
+- Packs and uploads artifacts (7-day retention)
+- Can be triggered manually via workflow_dispatch
+
+### Sweep Timing & Profiling
+
+Track performance of sweep runs:
+
+```bash
+# Run sweep with timing
+python -m traderbot.cli.sweep sweeps/my_sweep.yaml --workers 4 --time
+
+# Output: timings.csv with per-run and per-phase durations
+```
+
+The `timings.csv` file includes:
+- `run_idx` - Run index
+- `elapsed_s` - Total elapsed time
+- `load_s` - Data loading time
+- `splits_s` - Split creation time
+- `backtest_s` - Backtesting time
+- `report_s` - Report generation time
+- `total_s` - Sum of all phases
+
+After sweep completion, a timing summary is printed:
+```
+Timing Summary:
+  P50 elapsed: 12.34s
+  P90 elapsed: 15.67s
+  Total runs: 8
+```
+
+### Artifact Packing
+
+Pack sweep results for archival or sharing:
+
+```bash
+# Pack sweep with top 3 runs
+python scripts/pack_sweep.py runs/sweeps/my_sweep --output my_sweep.zip --max-size-mb 80 --top-n 3
+```
+
+**What gets packed:**
+- Essential files: `sweep_meta.json`, `all_results.json`, `leaderboard.csv/md`, `timings.csv`
+- Top N run directories (default: 3)
+- Excludes: `.parquet`, `.h5`, `.hdf5` files
+
+**Size guards:**
+- If zip > 80MB, automatically creates minimal version with best run only
+- Ensures CI artifacts stay within reasonable limits
+
+### Leaderboard with Timing
+
+When `timings.csv` exists, the leaderboard includes average elapsed time:
+
+```markdown
+# Sweep Leaderboard: my_sweep
+
+**Ranking by:** sharpe (max)
+**Total runs:** 8
+**Avg Elapsed Time:** 13.45s
+```
+
+### CI Smoke Test
+
+A minimal sweep configuration for CI health checks:
+
+```yaml
+# sweeps/ci_smoke.yaml
+name: ci_smoke
+output_root: runs/sweeps/ci_smoke
+metric: sharpe
+mode: max
+
+fixed_args:
+  start_date: "2023-01-10"
+  end_date: "2023-01-31"
+  universe: [AAPL, MSFT]
+  n_splits: 2
+  seed: 42
+
+grid:
+  sizer: [fixed, vol]
+  proba_threshold: [0.50, 0.55]
+```
+
+This runs 4 configurations (2 sizers × 2 thresholds) in ~30 seconds.
+
+### Phase 5.1 Verification
+
+```bash
+# Run CI smoke sweep locally
+python -m traderbot.cli.sweep sweeps/ci_smoke.yaml --workers 2 --time
+
+# Generate leaderboard
+python -m traderbot.cli.leaderboard runs/sweeps/ci_smoke
+
+# Pack artifacts
+python scripts/pack_sweep.py runs/sweeps/ci_smoke --output ci_smoke.zip --max-size-mb 80
+
+# Verify zip contents
+unzip -l ci_smoke.zip
 ```
 
 ---

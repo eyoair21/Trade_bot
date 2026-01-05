@@ -27,7 +27,7 @@ def build_report(
     # Header
     lines.append("# Walk-Forward Analysis Report")
     lines.append("")
-    
+
     # Run Manifest section
     if "manifest" in results:
         manifest = results["manifest"]
@@ -44,13 +44,13 @@ def build_report(
         lines.append(f"| Splits | {manifest.get('n_splits', 0)} |")
         lines.append(f"| IS Ratio | {manifest.get('is_ratio', 0.0)} |")
         lines.append(f"| Sizer | {manifest.get('sizer', 'fixed')} |")
-        
+
         # Sizer params
         sizer_params = manifest.get('sizer_params', {})
         if sizer_params:
             params_str = ", ".join(f"{k}={v}" for k, v in sizer_params.items())
             lines.append(f"| Sizer Params | {params_str} |")
-        
+
         lines.append(f"| Data Digest | `{manifest.get('data_digest', 'N/A')}` |")
         lines.append("")
     else:

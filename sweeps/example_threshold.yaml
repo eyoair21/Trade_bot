@@ -1,0 +1,31 @@
+# Sweep testing different probability thresholds
+# Usage: python -m traderbot.cli.sweep sweeps/example_threshold.yaml --workers 2
+
+name: threshold_optimization_sweep
+output_root: runs/sweep_threshold
+metric: sharpe
+mode: max
+
+# Arguments that stay constant across all runs
+fixed_args:
+  start_date: "2023-01-10"
+  end_date: "2023-03-31"
+  universe:
+    - AAPL
+    - MSFT
+    - NVDA
+  n_splits: 3
+  is_ratio: 0.6
+  universe_mode: static
+  sizer: vol
+  vol_target: 0.15
+  seed: 42
+
+# Grid of parameters to sweep
+grid:
+  proba_threshold:
+    - 0.50
+    - 0.55
+    - 0.60
+    - 0.65
+    - 0.70

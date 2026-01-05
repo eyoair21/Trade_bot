@@ -1,0 +1,64 @@
+name: Nightly Sweep
+
+on:
+  schedule:
+    - cron: "17 3 * * *"  # 03:17 UTC daily
+  workflow_dispatch:  # Manual trigger
+
+jobs:
+  nightly-sweep:
+    name: Nightly Sweep (CI Smoke)
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas numpy pyarrow python-dotenv
+          pip install pytest pytest-cov ruff black mypy
+      
+      - name: Generate sample data
+        run: |
+          python scripts/make_sample_data.py
+      
+      - name: Run CI smoke sweep
+        run: |
+          python -m traderbot.cli.sweep sweeps/ci_smoke.yaml --workers 2 --time
+      
+      - name: Generate leaderboard
+        run: |
+          python -m traderbot.cli.leaderboard runs/sweeps/ci_smoke
+      
+      - name: Pack sweep artifacts
+        run: |
+          python scripts/pack_sweep.py runs/sweeps/ci_smoke --output runs/sweeps/ci_smoke_packed.zip --max-size-mb 80
+      
+      - name: Get short SHA
+        id: short-sha
+        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+      
+      - name: Upload sweep artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-sweep-${{ steps.short-sha.outputs.sha_short }}
+          path: runs/sweeps/ci_smoke_packed.zip
+          retention-days: 7
+      
+      - name: Check for exceptional performance (manual dispatch only)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          # Extract best Sharpe from leaderboard
+          if [ -f runs/sweeps/ci_smoke/leaderboard.csv ]; then
+            best_sharpe=$(tail -1 runs/sweeps/ci_smoke/leaderboard.csv | cut -d',' -f4)
+            echo "Best Sharpe: $best_sharpe"
+            # Note: Actual release creation would go here if Sharpe > 0.8
+          fi
+

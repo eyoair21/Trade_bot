@@ -15,7 +15,7 @@ import pandas as pd
 from traderbot.config import get_config
 from traderbot.data.calendar import get_sessions_between
 from traderbot.engine.broker_sim import BrokerSimulator, OrderSide
-from traderbot.engine.position_sizing import PositionSizer, SizerType, calculate_volatility
+from traderbot.engine.position_sizing import PositionSizer, calculate_volatility
 from traderbot.engine.risk import RiskManager
 from traderbot.engine.strategy_base import StrategyBase
 from traderbot.features.ta import compute_model_features
@@ -430,10 +430,8 @@ class BacktestEngine:
             # Determine target direction from SignalType
             if signal.signal_type == SignalType.LONG:
                 target_side = OrderSide.BUY
-                signal_strength = signal.strength
             elif signal.signal_type == SignalType.SHORT:
                 target_side = OrderSide.SELL
-                signal_strength = signal.strength
             else:
                 continue
 

@@ -12,6 +12,7 @@ import subprocess
 import sys
 from datetime import UTC, date, datetime
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 
 import numpy as np
@@ -31,17 +32,18 @@ from traderbot.engine.risk import RiskManager
 from traderbot.engine.strategy_momo import MomentumStrategy
 from traderbot.logging_setup import get_logger, setup_logging
 from traderbot.metrics.calibration import compute_calibration
-from traderbot.reports.run_manifest import create_run_manifest, to_jsonable as manifest_to_jsonable
+from traderbot.reports.run_manifest import create_run_manifest
+from traderbot.reports.run_manifest import to_jsonable as manifest_to_jsonable
 
 logger = get_logger("cli.walkforward")
 
 
 def _to_jsonable(obj: Any) -> Any:
     """Convert non-JSON-serializable objects to JSON-safe types.
-    
+
     Args:
         obj: Object to convert.
-        
+
     Returns:
         JSON-serializable version of the object.
     """
@@ -205,7 +207,7 @@ def run_walkforward(
     # Set random seed for reproducibility
     random.seed(seed)
     np.random.seed(seed)
-    
+
     # Set torch seed if available (optional dependency)
     try:
         import torch
@@ -232,7 +234,7 @@ def run_walkforward(
         run_id = output_dir.name
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Get git SHA
     git_sha = get_git_sha()
 
@@ -258,7 +260,11 @@ def run_walkforward(
         logger.info(f"Training per split: epochs={epochs}, batch_size={batch_size}")
     logger.info(f"Output: {output_dir}")
 
+    # Initialize timing dict
+    timing = {}
+
     # Load data
+    t_load_start = perf_counter()
     adapter = ParquetLocalAdapter(base_path=data_root)
 
     try:
@@ -280,15 +286,21 @@ def run_walkforward(
         logger.error("No data loaded for any ticker")
         return {"error": "No data available"}
 
+    timing["load_data_s"] = perf_counter() - t_load_start
+
     # Create splits
+    t_splits_start = perf_counter()
     try:
         splits = create_splits(start_dt, end_dt, n_splits, is_ratio)
     except ValueError as e:
         logger.error(f"Failed to create splits: {e}")
         return {"error": str(e)}
 
+    timing["create_splits_s"] = perf_counter() - t_splits_start
+
     # Run walk-forward
     split_results: list[dict[str, Any]] = []
+    t_backtest_start = perf_counter()
     all_equity_curves: list[pd.DataFrame] = []
     calibration_results: list[dict[str, Any]] = []
     total_costs = {"commission": 0.0, "fees": 0.0, "slippage": 0.0}
@@ -463,13 +475,16 @@ def run_walkforward(
             ec["split"] = i + 1
             all_equity_curves.append(ec)
 
+    timing["backtest_s"] = perf_counter() - t_backtest_start
+
     # Create run manifest
+    t_report_start = perf_counter()
     sizer_params = {
         "fixed_frac": fixed_frac,
         "vol_target": vol_target,
         "kelly_cap": kelly_cap,
     }
-    
+
     all_cli_params = {
         "start_date": start_date,
         "end_date": end_date,
@@ -492,7 +507,7 @@ def run_walkforward(
         "opt_threshold": opt_threshold,
         "seed": seed,
     }
-    
+
     manifest = create_run_manifest(
         run_id=run_id,
         git_sha=git_sha,
@@ -506,7 +521,7 @@ def run_walkforward(
         sizer_params=sizer_params,
         all_cli_params=all_cli_params,
     )
-    
+
     # Aggregate results
     aggregate = {
         "run_id": run_id,
@@ -527,6 +542,7 @@ def run_walkforward(
         "execution_costs": total_costs,
         "total_execution_costs": sum(total_costs.values()),
         "manifest": manifest.to_dict(),
+        "timing": timing,
         "splits": split_results,
     }
 
@@ -559,7 +575,7 @@ def run_walkforward(
     with open(manifest_path, "w") as f:
         json.dump(manifest_to_jsonable(manifest), f, indent=2)
     logger.info(f"Manifest saved to {manifest_path}")
-    
+
     # Save environment manifest for backward compatibility
     env_manifest_path = output_dir / "env_manifest.json"
     with open(env_manifest_path, "w") as f:
@@ -570,6 +586,9 @@ def run_walkforward(
 
     report_path = output_dir / "report.md"
     build_report(aggregate, report_path)
+
+    timing["report_s"] = perf_counter() - t_report_start
+    timing["total_s"] = sum(timing.values())
 
     return aggregate
 
@@ -777,11 +796,11 @@ Examples:
     )
 
     args = parser.parse_args()
-    
+
     # Set all random seeds at the start for reproducibility
     random.seed(args.seed)
     np.random.seed(args.seed)
-    
+
     # Set torch seed if available (optional dependency)
     try:
         import torch

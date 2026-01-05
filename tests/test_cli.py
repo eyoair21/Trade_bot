@@ -10,11 +10,11 @@ import pandas as pd
 import pytest
 
 from traderbot.cli.walkforward import (
-    create_run_manifest,
     create_splits,
     create_synthetic_data,
     run_walkforward,
 )
+from traderbot.reports.run_manifest import RunManifest, create_run_manifest
 
 
 class TestCreateRunManifest:
@@ -22,21 +22,49 @@ class TestCreateRunManifest:
 
     def test_manifest_has_required_fields(self) -> None:
         """Test manifest contains required fields."""
-        manifest = create_run_manifest()
+        manifest = create_run_manifest(
+            run_id="2023-01-01T12-00-00",
+            git_sha="abc1234",
+            seed=42,
+            start_date="2023-01-01",
+            end_date="2023-03-31",
+            universe=["AAPL", "MSFT"],
+            n_splits=3,
+            is_ratio=0.6,
+            sizer="fixed",
+            sizer_params={"fixed_frac": 0.1},
+            all_cli_params={"start_date": "2023-01-01"},
+        )
 
-        assert "timestamp" in manifest
-        assert "git_sha" in manifest
-        assert "python_version" in manifest
-        assert "os" in manifest
-        assert "platform" in manifest
+        assert isinstance(manifest, RunManifest)
+        assert manifest.run_id == "2023-01-01T12-00-00"
+        assert manifest.git_sha == "abc1234"
+        assert manifest.seed == 42
+        assert manifest.universe == ["AAPL", "MSFT"]
+        assert manifest.n_splits == 3
+        assert manifest.is_ratio == 0.6
 
-    def test_manifest_timestamp_is_iso(self) -> None:
-        """Test timestamp is valid ISO format."""
-        manifest = create_run_manifest()
+    def test_manifest_to_dict(self) -> None:
+        """Test manifest converts to dictionary."""
+        manifest = create_run_manifest(
+            run_id="2023-01-01T12-00-00",
+            git_sha="abc1234",
+            seed=42,
+            start_date="2023-01-01",
+            end_date="2023-03-31",
+            universe=["AAPL"],
+            n_splits=3,
+            is_ratio=0.6,
+            sizer="vol",
+            sizer_params={"vol_target": 0.15},
+            all_cli_params={},
+        )
 
-        # Should be parseable as ISO datetime
-        dt = datetime.fromisoformat(manifest["timestamp"])
-        assert dt is not None
+        manifest_dict = manifest.to_dict()
+        assert isinstance(manifest_dict, dict)
+        assert "run_id" in manifest_dict
+        assert "git_sha" in manifest_dict
+        assert "seed" in manifest_dict
 
 
 class TestCreateSplits:

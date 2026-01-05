@@ -1,0 +1,25 @@
+# CI Smoke Test Sweep
+# Minimal configuration to verify system health in CI
+name: ci_smoke
+output_root: runs/sweeps/ci_smoke
+metric: sharpe
+mode: max
+
+fixed_args:
+  start_date: "2023-01-10"
+  end_date: "2023-01-31"  # Short date range for speed
+  universe:
+    - AAPL
+    - MSFT
+  n_splits: 2  # Minimal splits
+  is_ratio: 0.6
+  seed: 42
+
+grid:
+  sizer:
+    - fixed
+    - vol
+  proba_threshold:
+    - 0.50
+    - 0.55
+

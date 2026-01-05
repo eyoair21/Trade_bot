@@ -11,7 +11,7 @@ from typing import Any
 @dataclass
 class RunManifest:
     """Manifest capturing all information needed to reproduce a run."""
-    
+
     run_id: str
     git_sha: str
     seed: int
@@ -24,7 +24,7 @@ class RunManifest:
     sizer: str
     sizer_params: dict[str, Any] = field(default_factory=dict)
     data_digest: str = ""
-    
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary format."""
         return {
@@ -58,7 +58,7 @@ def create_run_manifest(
     all_cli_params: dict[str, Any],
 ) -> RunManifest:
     """Create a run manifest from parameters.
-    
+
     Args:
         run_id: Unique run identifier (timestamp-based).
         git_sha: Git commit SHA.
@@ -71,14 +71,14 @@ def create_run_manifest(
         sizer: Position sizer type.
         sizer_params: Position sizer parameters.
         all_cli_params: All CLI parameters after applying defaults.
-        
+
     Returns:
         RunManifest instance.
     """
     # Compute data digest (simple SHA256 of universe + date range)
     data_str = f"{','.join(sorted(universe))}|{start_date}|{end_date}"
     data_digest = hashlib.sha256(data_str.encode()).hexdigest()[:16]
-    
+
     return RunManifest(
         run_id=run_id,
         git_sha=git_sha,
@@ -97,10 +97,10 @@ def create_run_manifest(
 
 def to_jsonable(manifest: RunManifest) -> dict[str, Any]:
     """Convert RunManifest to JSON-serializable dictionary.
-    
+
     Args:
         manifest: RunManifest instance.
-        
+
     Returns:
         JSON-safe dictionary.
     """

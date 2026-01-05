@@ -10,8 +10,10 @@ Usage:
 import argparse
 import json
 import multiprocessing
+import platform
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -43,6 +45,10 @@ def run_single_config(args: tuple[int, dict[str, Any], Path]) -> dict[str, Any]:
 
     try:
         # Extract and convert parameters for run_walkforward
+        # Use deterministic sub-seed for parallel execution
+        base_seed = config.get("seed", 42)
+        run_seed = int(base_seed) + int(run_idx)
+
         wf_kwargs = {
             "start_date": config.get("start_date"),
             "end_date": config.get("end_date"),
@@ -52,7 +58,7 @@ def run_single_config(args: tuple[int, dict[str, Any], Path]) -> dict[str, Any]:
             "output_dir": run_output,
             "universe_mode": config.get("universe_mode", "static"),
             "sizer": config.get("sizer", "fixed"),
-            "seed": config.get("seed", 42),
+            "seed": run_seed,
         }
 
         # Add optional parameters
@@ -134,7 +140,7 @@ def run_sweep(
     # Create output directory
     config.output_root.mkdir(parents=True, exist_ok=True)
 
-    # Save sweep config for reference
+    # Save sweep config for reference with provenance metadata
     sweep_meta = {
         "name": config.name,
         "metric": config.metric,
@@ -143,6 +149,9 @@ def run_sweep(
         "workers": workers,
         "fixed_args": config.fixed_args,
         "grid": config.grid,
+        "python": sys.version.split()[0],
+        "os": platform.platform(),
+        "timestamp_utc": datetime.now(timezone.utc).isoformat(),
     }
     meta_path = config.output_root / "sweep_meta.json"
     with open(meta_path, "w") as f:
@@ -154,6 +163,13 @@ def run_sweep(
     ]
 
     start_time = time.time()
+
+    # Enable profiling if requested
+    pr = None
+    if enable_profiling:
+        import cProfile
+        pr = cProfile.Profile()
+        pr.enable()
 
     # Execute runs
     if workers == 1:
@@ -184,6 +200,18 @@ def run_sweep(
         json.dump(results, f, indent=2, default=str)
 
     logger.info(f"All results saved to {all_results_path}")
+
+    # Write profiling output if requested
+    if enable_profiling and pr is not None:
+        import io
+        import pstats
+
+        pr.disable()
+        s = io.StringIO()
+        pstats.Stats(pr, stream=s).sort_stats("cumtime").print_stats(40)
+        profile_path = config.output_root / "profile.txt"
+        profile_path.write_text(s.getvalue(), encoding="utf-8")
+        logger.info(f"Profile data written to {profile_path}")
 
     # Write timing CSV if requested
     if enable_timing:

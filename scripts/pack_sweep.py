@@ -10,6 +10,32 @@ import sys
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 
+# Denylist patterns to prevent secrets leakage
+DENY_PATTERNS = {".env", ".*", "node_modules", "__pycache__", ".coverage", "*.key", "*.pem"}
+
+
+def should_exclude(file_path: Path) -> bool:
+    """Check if file should be excluded based on denylist.
+
+    Args:
+        file_path: Path to check.
+
+    Returns:
+        True if file should be excluded.
+    """
+    # Check exact matches
+    if file_path.name in DENY_PATTERNS:
+        return True
+
+    # Check suffix patterns
+    for pattern in DENY_PATTERNS:
+        if pattern.startswith("*.") and file_path.suffix == pattern[1:]:
+            return True
+        if pattern.startswith(".") and file_path.name.startswith("."):
+            return True
+
+    return False
+
 
 def get_dir_size_mb(path: Path) -> float:
     """Calculate directory size in MB.
@@ -99,6 +125,10 @@ def pack_sweep(
                     if file_path.suffix in [".parquet", ".h5", ".hdf5"]:
                         continue
 
+                    # Skip secrets and unwanted files
+                    if should_exclude(file_path):
+                        continue
+
                     arcname = f"{sweep_root.name}/{run_dir_name}/{file_path.relative_to(run_dir)}"
                     zipf.write(file_path, arcname)
 
@@ -131,6 +161,8 @@ def pack_sweep(
                 if best_run_dir.exists():
                     for file_path in best_run_dir.rglob("*"):
                         if file_path.is_file() and file_path.suffix not in [".parquet", ".h5"]:
+                            if should_exclude(file_path):
+                                continue
                             arcname = f"{sweep_root.name}/{top_run_dirs[0]}/{file_path.relative_to(best_run_dir)}"
                             zipf.write(file_path, arcname)
 

@@ -1,7 +1,7 @@
 # TraderBot - Paper Trading Research Bot
 
-[![CI](https://github.com/eyoair21/Trade_bot/actions/workflows/ci.yml/badge.svg)](https://github.com/eyoair21/Trade_bot/actions/workflows/ci.yml)
-[![Nightly Sweep](https://github.com/eyoair21/Trade_bot/actions/workflows/nightly-sweep.yml/badge.svg)](https://github.com/eyoair21/Trade_bot/actions/workflows/nightly-sweep.yml)
+[![CI](https://github.com/eyoair21/Trade_Bot/actions/workflows/ci.yml/badge.svg)](https://github.com/eyoair21/Trade_Bot/actions/workflows/ci.yml)
+[![Nightly Sweep](https://github.com/eyoair21/Trade_Bot/actions/workflows/nightly-sweep.yml/badge.svg)](https://github.com/eyoair21/Trade_Bot/actions/workflows/nightly-sweep.yml)
 
 A clean, testable Python repository for paper-trading research with deterministic runs, basic momentum strategy, data/risk scaffolding, and CI.
 

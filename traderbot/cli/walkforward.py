@@ -260,8 +260,9 @@ def run_walkforward(
         logger.info(f"Training per split: epochs={epochs}, batch_size={batch_size}")
     logger.info(f"Output: {output_dir}")
 
-    # Initialize timing dict
+    # Initialize timing dict and wall-clock start
     timing = {}
+    t0 = perf_counter()
 
     # Load data
     t_load_start = perf_counter()
@@ -588,7 +589,7 @@ def run_walkforward(
     build_report(aggregate, report_path)
 
     timing["report_s"] = perf_counter() - t_report_start
-    timing["total_s"] = sum(timing.values())
+    timing["total_s"] = perf_counter() - t0  # Wall-clock total
 
     return aggregate
 

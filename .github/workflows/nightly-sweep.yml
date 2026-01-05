@@ -39,17 +39,13 @@ jobs:
       
       - name: Pack sweep artifacts
         run: |
-          python scripts/pack_sweep.py runs/sweeps/ci_smoke --output runs/sweeps/ci_smoke_packed.zip --max-size-mb 80
-      
-      - name: Get short SHA
-        id: short-sha
-        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
-      
+          python scripts/pack_sweep.py runs/sweeps/ci_smoke --output ci_smoke.zip --max-size-mb 80
+
       - name: Upload sweep artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: nightly-sweep-${{ steps.short-sha.outputs.sha_short }}
-          path: runs/sweeps/ci_smoke_packed.zip
+          name: nightly-sweep-${{ github.sha }}
+          path: ci_smoke.zip
           retention-days: 7
       
       - name: Check for exceptional performance (manual dispatch only)

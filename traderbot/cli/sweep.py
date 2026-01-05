@@ -24,16 +24,16 @@ from traderbot.sweeps.schema import SweepConfig, load_sweep_config
 logger = get_logger("cli.sweep")
 
 
-def run_single_config(args: tuple[int, dict[str, Any], Path]) -> dict[str, Any]:
+def run_single_config(args: tuple[int, dict[str, Any], Path, bool]) -> dict[str, Any]:
     """Run a single walk-forward configuration.
 
     Args:
-        args: Tuple of (run_index, config_dict, output_dir).
+        args: Tuple of (run_index, config_dict, output_dir, enable_profiling).
 
     Returns:
         Results dictionary with run metadata.
     """
-    run_idx, config, output_dir = args
+    run_idx, config, output_dir, enable_profiling = args
 
     # Create run-specific output directory
     run_output = output_dir / f"run_{run_idx:03d}"
@@ -42,6 +42,13 @@ def run_single_config(args: tuple[int, dict[str, Any], Path]) -> dict[str, Any]:
     logger.info(f"Starting run {run_idx}: {config}")
 
     start_time = time.time()
+    
+    # Enable per-run profiling if requested
+    pr = None
+    if enable_profiling:
+        import cProfile
+        pr = cProfile.Profile()
+        pr.enable()
 
     try:
         # Extract and convert parameters for run_walkforward
@@ -80,6 +87,18 @@ def run_single_config(args: tuple[int, dict[str, Any], Path]) -> dict[str, Any]:
         results = run_walkforward(**wf_kwargs)
 
         elapsed = time.time() - start_time
+        
+        # Save per-run profile if enabled
+        if enable_profiling and pr is not None:
+            import io
+            
+            import pstats
+            
+            pr.disable()
+            s = io.StringIO()
+            pstats.Stats(pr, stream=s).sort_stats("cumtime").print_stats(40)
+            profile_path = run_output / "profile.txt"
+            profile_path.write_text(s.getvalue(), encoding="utf-8")
 
         # Add metadata to results
         results["_run_idx"] = run_idx
@@ -95,6 +114,10 @@ def run_single_config(args: tuple[int, dict[str, Any], Path]) -> dict[str, Any]:
     except Exception as e:
         elapsed = time.time() - start_time
         logger.error(f"Run {run_idx} failed: {e}")
+        
+        # Disable profiler on error
+        if enable_profiling and pr is not None:
+            pr.disable()
 
         return {
             "_run_idx": run_idx,
@@ -159,17 +182,10 @@ def run_sweep(
 
     # Prepare run arguments
     run_args = [
-        (idx, cfg, config.output_root) for idx, cfg in enumerate(run_configs)
+        (idx, cfg, config.output_root, enable_profiling) for idx, cfg in enumerate(run_configs)
     ]
 
     start_time = time.time()
-
-    # Enable profiling if requested
-    pr = None
-    if enable_profiling:
-        import cProfile
-        pr = cProfile.Profile()
-        pr.enable()
 
     # Execute runs
     if workers == 1:
@@ -200,18 +216,6 @@ def run_sweep(
         json.dump(results, f, indent=2, default=str)
 
     logger.info(f"All results saved to {all_results_path}")
-
-    # Write profiling output if requested
-    if enable_profiling and pr is not None:
-        import io
-        import pstats
-
-        pr.disable()
-        s = io.StringIO()
-        pstats.Stats(pr, stream=s).sort_stats("cumtime").print_stats(40)
-        profile_path = config.output_root / "profile.txt"
-        profile_path.write_text(s.getvalue(), encoding="utf-8")
-        logger.info(f"Profile data written to {profile_path}")
 
     # Write timing CSV if requested
     if enable_timing:

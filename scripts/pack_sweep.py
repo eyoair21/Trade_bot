@@ -111,7 +111,7 @@ def pack_sweep(
             if file_path.exists():
                 arcname = f"{sweep_root.name}/{filename}"
                 zipf.write(file_path, arcname)
-                print(f"  ✓ Added {filename}")
+                print(f"  + Added {filename}")
 
         # Add top run directories
         for run_dir_name in top_run_dirs:
@@ -132,7 +132,7 @@ def pack_sweep(
                     arcname = f"{sweep_root.name}/{run_dir_name}/{file_path.relative_to(run_dir)}"
                     zipf.write(file_path, arcname)
 
-            print(f"  ✓ Added {run_dir_name}/")
+            print(f"  + Added {run_dir_name}/")
 
     # Check size
     zip_size_mb = output_path.stat().st_size / (1024 * 1024)
@@ -141,7 +141,7 @@ def pack_sweep(
 
     # If over limit, create minimal version
     if zip_size_mb > max_size_mb:
-        print(f"⚠️  Size exceeds limit ({max_size_mb} MB)")
+        print(f"WARNING: Size exceeds limit ({max_size_mb} MB)")
         print("Creating minimal version with best run only...")
 
         # Create minimal zip with only essential files + best run
@@ -172,11 +172,11 @@ def pack_sweep(
 
         # Replace original if minimal is still too large
         if minimal_size_mb > max_size_mb:
-            print("⚠️  Even minimal version exceeds limit!")
+            print("WARNING: Even minimal version exceeds limit!")
         else:
             output_path.unlink()
             minimal_path.rename(output_path)
-            print("✓ Using minimal version")
+            print("OK: Using minimal version")
 
 
 def main() -> int:

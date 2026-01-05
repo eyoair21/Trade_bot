@@ -205,8 +205,12 @@ def save_leaderboard_markdown(
                         pass
 
             if elapsed_times:
-                avg_elapsed = np.mean(elapsed_times)
-                lines.append(f"**Avg Elapsed Time:** {avg_elapsed:.2f}s")
+                p50 = np.percentile(elapsed_times, 50)
+                p90 = np.percentile(elapsed_times, 90)
+                lines.append("")
+                lines.append("### Timing Summary")
+                lines.append(f"- **P50 Elapsed:** {p50:.2f}s")
+                lines.append(f"- **P90 Elapsed:** {p90:.2f}s")
 
     lines.append("")
 

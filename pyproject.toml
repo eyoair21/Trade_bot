@@ -1,0 +1,64 @@
+[tool.poetry]
+name = "traderbot"
+version = "0.1.0"
+description = "Paper-trading research bot with deterministic runs, basic strategy, and risk scaffolding"
+authors = ["Trading Team <trading@example.com>"]
+readme = "README.md"
+packages = [{include = "traderbot"}]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+pandas = "^2.0.0"
+numpy = "^1.24.0"
+pyarrow = "^14.0.0"
+python-dotenv = "^1.0.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.0"
+pytest-cov = "^4.1.0"
+ruff = "^0.1.0"
+black = "^23.0.0"
+mypy = "^1.5.0"
+pandas-stubs = "^2.0.0"
+types-python-dateutil = "^2.8.0"
+
+[tool.poetry.scripts]
+walkforward = "traderbot.cli.walkforward:main"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM"]
+ignore = ["E501"]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+exclude = ["tests/"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+
+[tool.coverage.run]
+source = ["traderbot"]
+omit = ["traderbot/opt/*", "traderbot/report/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+]

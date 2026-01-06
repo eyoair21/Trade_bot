@@ -9,7 +9,7 @@ on:
 
 # Permissions for GitHub Pages deployment
 permissions:
-  contents: write  # For badge commits
+  contents: read   # Read-only for most operations
   pages: write     # For Pages deployment
   id-token: write  # For Pages deployment authentication
 
@@ -143,6 +143,8 @@ jobs:
 
       - name: Commit badge to repo (main branch + PASS only)
         if: github.ref == 'refs/heads/main' && steps.regress.outcome == 'success'
+        permissions:
+          contents: write  # Needed for badge commits
         run: |
           # Configure git for github-actions[bot]
           git config user.name "github-actions[bot]"
@@ -400,8 +402,8 @@ jobs:
 
           echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

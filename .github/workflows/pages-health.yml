@@ -19,8 +19,8 @@ jobs:
           echo "=== GitHub Pages Health Check ==="
           echo ""
           
-          # Test endpoints
-          for ep in "" "/reports/" "/reports/history.json" "/reports/feed.xml"; do
+          # Test endpoints - / and /reports/ are required, others are optional
+          for ep in "" "/reports/"; do
             url="$BASE$ep"
             code=$(curl -sL -o /dev/null -w "%{http_code}" "$url" 2>/dev/null || echo "ERR")
             
@@ -29,6 +29,18 @@ jobs:
             else
               printf "✗ %-50s %s\n" "$url" "$code"
               FAILED=1
+            fi
+          done
+          
+          # Optional endpoints (history.json and feed.xml may not exist on first run)
+          for ep in "/reports/history.json" "/reports/feed.xml"; do
+            url="$BASE$ep"
+            code=$(curl -sL -o /dev/null -w "%{http_code}" "$url" 2>/dev/null || echo "ERR")
+            
+            if [ "$code" = "200" ]; then
+              printf "✓ %-50s %s\n" "$url" "$code"
+            else
+              printf "⚠ %-50s %s (optional, may not exist yet)\n" "$url" "$code"
             fi
           done
           

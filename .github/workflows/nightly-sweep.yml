@@ -83,6 +83,37 @@ jobs:
             --out runs/sweeps/ci_smoke/regression_report.md
         continue-on-error: true
 
+      - name: Generate summary.json
+        if: always()
+        run: |
+          # Generate summary.json from baseline_diff.json
+          python -c "
+          import json
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          diff_path = Path('runs/sweeps/ci_smoke/baseline_diff.json')
+          summary_path = Path('runs/sweeps/ci_smoke/summary.json')
+
+          if diff_path.exists():
+              diff_data = json.loads(diff_path.read_text())
+              summary = {
+                  'schema_version': '1',
+                  'run_id': '${{ steps.set-run-id.outputs.run_id }}',
+                  'verdict': 'PASS' if diff_data.get('passed', False) else 'FAIL',
+                  'sharpe_delta': round(diff_data.get('sharpe_delta', diff_data.get('metric_delta', 0.0)), 6),
+                  'trades_delta': None,
+                  'timing_p90': round(diff_data.get('timing', {}).get('current', {}).get('p90', 0.0), 3),
+                  'git_sha': '${{ github.sha }}',
+                  'generated_utc': datetime.now(timezone.utc).isoformat()
+              }
+              summary_path.write_text(json.dumps(summary, indent=2))
+              print(f'Generated summary.json: {summary[\"verdict\"]}')
+          else:
+              print('baseline_diff.json not found, skipping summary.json')
+          "
+        continue-on-error: true
+
       - name: Generate trend plots
         if: always()
         run: |
@@ -154,6 +185,7 @@ jobs:
             runs/sweeps/ci_smoke/regression_report.html
             runs/sweeps/ci_smoke/baseline_diff.json
             runs/sweeps/ci_smoke/provenance.json
+            runs/sweeps/ci_smoke/summary.json
             runs/sweeps/ci_smoke/variance_report.json
             runs/sweeps/ci_smoke/determinism.json
             runs/sweeps/ci_smoke/plots/
@@ -250,7 +282,11 @@ jobs:
             fi
           fi
 
-          # Generate SHA256 integrity hashes for run directory
+          # Minify HTML files to reduce file size
+          echo "Minifying HTML files..."
+          python scripts/dev/minify_html.py --input-dir public/reports/$RUN_ID --pattern "*.html"
+
+          # Generate SHA256 integrity hashes for run directory (after minification)
           echo "Generating sha256sums.txt..."
           python scripts/dev/generate_sha256sums.py --report-dir public/reports/$RUN_ID
 
@@ -278,8 +314,8 @@ jobs:
             done
           fi
 
-          # Update manifest and generate index with prune policy
-          echo "Updating manifest and pruning old reports..."
+          # Update manifest, generate index with prune policy, and build history.json
+          echo "Updating manifest, building history, and pruning old reports..."
           python scripts/dev/update_pages_index.py \
             --manifest public/reports/manifest.json \
             --run-id "$RUN_ID" \
@@ -288,7 +324,23 @@ jobs:
             --max-runs 50 \
             --prune \
             --reports-dir public/reports \
-            --index-out public/reports/index.html
+            --index-out public/reports/index.html \
+            --history-out public/reports/history.json
+
+          # Generate Atom feed from history.json
+          echo "Generating Atom feed..."
+          python scripts/dev/make_feed.py \
+            --history public/reports/history.json \
+            --out public/reports/feed.xml \
+            --base-url "https://eyoair21.github.io/Trade_Bot" \
+            --max-entries 20
+
+          # Generate top-level integrity hashes (for index, history, feed)
+          echo "Generating top-level sha256sums.txt..."
+          python scripts/dev/generate_sha256sums.py \
+            --report-dir public/reports \
+            --top-level \
+            --output sha256sums_root.txt
 
           # Create root redirect
           cat > public/index.html << 'EOF'
@@ -370,3 +422,5 @@ jobs:
           echo "- **Latest Report:** https://eyoair21.github.io/Trade_Bot/reports/latest/regression_report.html" >> $GITHUB_STEP_SUMMARY
           echo "- **This Run:** https://eyoair21.github.io/Trade_Bot/reports/$RUN_ID/regression_report.html" >> $GITHUB_STEP_SUMMARY
           echo "- **All Reports:** https://eyoair21.github.io/Trade_Bot/reports/" >> $GITHUB_STEP_SUMMARY
+          echo "- **Atom Feed:** https://eyoair21.github.io/Trade_Bot/reports/feed.xml" >> $GITHUB_STEP_SUMMARY
+          echo "- **History Data:** https://eyoair21.github.io/Trade_Bot/reports/history.json" >> $GITHUB_STEP_SUMMARY

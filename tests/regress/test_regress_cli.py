@@ -1422,3 +1422,631 @@ class TestPagesIndexDarkLight:
         assert not (reports_dir / "run-2").exists()
         assert (reports_dir / "run-3").exists()
         assert (reports_dir / "run-4").exists()
+
+
+# ============================================================
+# Test HTML Report Banner (v0.6.4)
+# ============================================================
+
+
+class TestHTMLReportBanner:
+    """Tests for HTML report PASS/FAIL status banner."""
+
+    def _make_test_objects(self, passed: bool = True):
+        """Create test objects for HTML report generation."""
+        from traderbot.metrics.compare import (
+            ComparisonVerdict, CurrentData, BaselineData, PerfBudget
+        )
+
+        verdict = ComparisonVerdict(
+            passed=passed,
+            metric_passed=passed,
+            timing_passed=True,
+            success_rate_passed=True,
+            determinism_passed=None,
+            metric_delta=0.1 if passed else -0.5,
+            timing_p50_delta=0.0,
+            timing_p90_delta=0.0,
+            success_rate_delta=0.0,
+            determinism_variance=None,
+            details={"best_metric": 0.5},
+            messages=["All checks passed" if passed else "Regression detected"],
+        )
+
+        current = CurrentData(
+            leaderboard=[{"run": "test", "sharpe": 0.5}],
+            timing={"total_time_s": 10.0, "p50": 1.0, "p90": 2.5},
+            success_rate=1.0,
+            total_runs=5,
+            best_metric=0.5,
+        )
+
+        baseline = BaselineData(
+            git_sha="baseline123",
+            created_utc="2026-01-01T00:00:00Z",
+            metric="sharpe",
+            mode="no_regression",
+            leaderboard=[{"run": "baseline", "sharpe": 0.4}],
+            timing={"total_time_s": 10.0, "p50": 1.0, "p90": 2.0},
+            summary={"sharpe": 0.4},
+        )
+
+        budget = PerfBudget(metric="sharpe", mode="no_regression")
+
+        return verdict, current, baseline, budget
+
+    def test_html_has_verdict_banner(self):
+        """Test that HTML report contains verdict banner."""
+        from traderbot.metrics.compare import generate_html_report
+
+        verdict, current, baseline, budget = self._make_test_objects(passed=True)
+        html = generate_html_report(verdict, current, baseline, budget)
+
+        assert "verdict-banner" in html
+
+    def test_html_banner_shows_pass_for_passing_verdict(self):
+        """Test that banner shows PASS with green styling for passing verdict."""
+        from traderbot.metrics.compare import generate_html_report
+
+        verdict, current, baseline, budget = self._make_test_objects(passed=True)
+        html = generate_html_report(verdict, current, baseline, budget)
+
+        assert 'class="verdict-banner pass"' in html
+        assert "PASS" in html
+
+    def test_html_banner_shows_fail_for_failing_verdict(self):
+        """Test that banner shows FAIL with red styling for failing verdict."""
+        from traderbot.metrics.compare import generate_html_report
+
+        verdict, current, baseline, budget = self._make_test_objects(passed=False)
+        html = generate_html_report(verdict, current, baseline, budget)
+
+        assert 'class="verdict-banner fail"' in html
+        assert "FAIL" in html
+
+    def test_html_banner_shows_sharpe_delta(self):
+        """Test that banner displays Sharpe delta."""
+        from traderbot.metrics.compare import generate_html_report
+
+        verdict, current, baseline, budget = self._make_test_objects(passed=True)
+        html = generate_html_report(verdict, current, baseline, budget)
+
+        # Should contain Sharpe delta display
+        assert "Sharpe" in html and "0.1" in html or "+0.1" in html
+
+    def test_html_banner_shows_timing_p90(self):
+        """Test that banner displays P90 timing."""
+        from traderbot.metrics.compare import generate_html_report
+
+        verdict, current, baseline, budget = self._make_test_objects(passed=True)
+        html = generate_html_report(verdict, current, baseline, budget)
+
+        # Should contain P90 display (2.5s from fixture)
+        assert "P90" in html
+        assert "2.5" in html or "2.50" in html
+
+    def test_html_banner_shows_runs_count(self):
+        """Test that banner displays total runs count."""
+        from traderbot.metrics.compare import generate_html_report
+
+        verdict, current, baseline, budget = self._make_test_objects(passed=True)
+        html = generate_html_report(verdict, current, baseline, budget)
+
+        # Should contain runs count (5 from fixture)
+        assert "Runs" in html
+        assert ">5<" in html or "Runs:</span> 5" in html
+
+    def test_html_banner_has_pass_fail_colors(self):
+        """Test that CSS includes pass/fail color variables."""
+        from traderbot.metrics.compare import generate_html_report
+
+        verdict, current, baseline, budget = self._make_test_objects(passed=True)
+        html = generate_html_report(verdict, current, baseline, budget)
+
+        assert "--pass-color" in html
+        assert "--fail-color" in html
+        assert "--pass-bg" in html
+        assert "--fail-bg" in html
+
+
+# ============================================================
+# Test summary.json generation (v0.6.4)
+# ============================================================
+
+
+class TestSummaryJsonIntegrity:
+    """Tests for summary.json generation and integrity."""
+
+    def test_generate_summary_json_exists(self):
+        """Test that generate_summary_json function exists."""
+        from traderbot.metrics.compare import generate_summary_json
+        assert callable(generate_summary_json)
+
+    def test_generate_summary_json_schema(self):
+        """Test that summary.json has correct schema fields."""
+        from traderbot.metrics.compare import (
+            generate_summary_json, ComparisonVerdict, CurrentData
+        )
+
+        verdict = ComparisonVerdict(
+            passed=True,
+            metric_passed=True,
+            timing_passed=True,
+            success_rate_passed=True,
+            determinism_passed=None,
+            metric_delta=0.15,
+            timing_p50_delta=0.0,
+            timing_p90_delta=0.0,
+            success_rate_delta=0.0,
+            determinism_variance=None,
+        )
+
+        current = CurrentData(
+            leaderboard=[{"run": "test"}],
+            timing={"p90": 12.5},
+            success_rate=1.0,
+            total_runs=10,
+            best_metric=0.8,
+        )
+
+        summary = generate_summary_json(
+            run_id="12345-abc1234",
+            verdict=verdict,
+            current=current,
+            git_sha="abc123def456",
+        )
+
+        # Check all required fields
+        assert "schema_version" in summary
+        assert summary["schema_version"] == "1"
+        assert summary["run_id"] == "12345-abc1234"
+        assert summary["verdict"] == "PASS"
+        assert summary["sharpe_delta"] == 0.15
+        assert summary["timing_p90"] == 12.5
+        assert summary["git_sha"] == "abc123def456"
+        assert "generated_utc" in summary
+
+    def test_generate_summary_json_fail_verdict(self):
+        """Test that summary.json correctly reports FAIL verdict."""
+        from traderbot.metrics.compare import (
+            generate_summary_json, ComparisonVerdict, CurrentData
+        )
+
+        verdict = ComparisonVerdict(
+            passed=False,
+            metric_passed=False,
+            timing_passed=True,
+            success_rate_passed=True,
+            determinism_passed=None,
+            metric_delta=-0.25,
+            timing_p50_delta=0.0,
+            timing_p90_delta=0.0,
+            success_rate_delta=0.0,
+            determinism_variance=None,
+        )
+
+        current = CurrentData(
+            leaderboard=[],
+            timing={"p90": 5.0},
+            success_rate=0.8,
+            total_runs=5,
+            best_metric=0.3,
+        )
+
+        summary = generate_summary_json(
+            run_id="fail-run",
+            verdict=verdict,
+            current=current,
+        )
+
+        assert summary["verdict"] == "FAIL"
+        assert summary["sharpe_delta"] == -0.25
+
+    def test_generate_summary_json_default_git_sha(self):
+        """Test that summary.json defaults git_sha to 'unknown'."""
+        from traderbot.metrics.compare import (
+            generate_summary_json, ComparisonVerdict, CurrentData
+        )
+
+        verdict = ComparisonVerdict(
+            passed=True,
+            metric_passed=True,
+            timing_passed=True,
+            success_rate_passed=True,
+            determinism_passed=None,
+            metric_delta=0.0,
+            timing_p50_delta=0.0,
+            timing_p90_delta=0.0,
+            success_rate_delta=0.0,
+            determinism_variance=None,
+        )
+
+        current = CurrentData(
+            leaderboard=[],
+            timing={"p90": 1.0},
+            success_rate=1.0,
+            total_runs=1,
+            best_metric=0.5,
+        )
+
+        summary = generate_summary_json(
+            run_id="test-run",
+            verdict=verdict,
+            current=current,
+        )
+
+        assert summary["git_sha"] == "unknown"
+
+    def test_generate_summary_json_rounding(self):
+        """Test that summary.json properly rounds values."""
+        from traderbot.metrics.compare import (
+            generate_summary_json, ComparisonVerdict, CurrentData
+        )
+
+        verdict = ComparisonVerdict(
+            passed=True,
+            metric_passed=True,
+            timing_passed=True,
+            success_rate_passed=True,
+            determinism_passed=None,
+            metric_delta=0.123456789,
+            timing_p50_delta=0.0,
+            timing_p90_delta=0.0,
+            success_rate_delta=0.0,
+            determinism_variance=None,
+        )
+
+        current = CurrentData(
+            leaderboard=[],
+            timing={"p90": 1.23456789},
+            success_rate=1.0,
+            total_runs=1,
+            best_metric=0.5,
+        )
+
+        summary = generate_summary_json(
+            run_id="test-run",
+            verdict=verdict,
+            current=current,
+        )
+
+        # sharpe_delta should be rounded to 6 decimal places
+        assert summary["sharpe_delta"] == 0.123457
+        # timing_p90 should be rounded to 3 decimal places
+        assert summary["timing_p90"] == 1.235
+
+    def test_sha256sums_includes_summary_json(self):
+        """Test that generate_sha256sums includes summary.json."""
+        import sys
+        script_dir = Path(__file__).parent.parent.parent / "scripts" / "dev"
+        sys.path.insert(0, str(script_dir))
+
+        from generate_sha256sums import INTEGRITY_FILES
+
+        assert "summary.json" in INTEGRITY_FILES
+
+
+# ============================================================
+# Test Index uses summary.json (v0.6.4)
+# ============================================================
+
+
+class TestIndexUsesSummaryJson:
+    """Tests for index enrichment using summary.json."""
+
+    def test_add_run_accepts_summary_parameter(self):
+        """Test that add_run accepts summary data parameter."""
+        import sys
+        script_dir = Path(__file__).parent.parent.parent / "scripts" / "dev"
+        sys.path.insert(0, str(script_dir))
+
+        from update_pages_index import add_run
+
+        manifest = {"runs": [], "updated": None, "latest": None}
+
+        summary = {
+            "sharpe_delta": 0.15,
+            "timing_p90": 2.5,
+            "git_sha": "abc123",
+        }
+
+        manifest = add_run(manifest, "test-run", "2026-01-05T12:00:00Z", "pass", summary)
+
+        # Should include enriched fields
+        assert manifest["runs"][0]["sharpe_delta"] == 0.15
+        assert manifest["runs"][0]["timing_p90"] == 2.5
+        assert manifest["runs"][0]["git_sha"] == "abc123"
+
+    def test_add_run_works_without_summary(self):
+        """Test that add_run still works without summary data."""
+        import sys
+        script_dir = Path(__file__).parent.parent.parent / "scripts" / "dev"
+        sys.path.insert(0, str(script_dir))
+
+        from update_pages_index import add_run
+
+        manifest = {"runs": [], "updated": None, "latest": None}
+
+        # No summary provided
+        manifest = add_run(manifest, "test-run", "2026-01-05T12:00:00Z", "pass")
+
+        assert manifest["runs"][0]["id"] == "test-run"
+        assert "sharpe_delta" not in manifest["runs"][0]
+
+    def test_index_html_shows_enriched_data(self):
+        """Test that index HTML displays enriched row data."""
+        import sys
+        script_dir = Path(__file__).parent.parent.parent / "scripts" / "dev"
+        sys.path.insert(0, str(script_dir))
+
+        from update_pages_index import generate_index_html
+
+        manifest = {
+            "runs": [
+                {
+                    "id": "enriched-run",
+                    "timestamp": "2026-01-05T12:00:00Z",
+                    "status": "pass",
+                    "sharpe_delta": 0.123,
+                    "timing_p90": 2.5,
+                    "git_sha": "abc123def",
+                },
+            ],
+            "updated": "2026-01-05T12:00:00Z",
+            "latest": "enriched-run",
+        }
+
+        html = generate_index_html(manifest)
+
+        # Should contain enriched data display
+        assert "0.123" in html or "+0.123" in html  # Sharpe delta
+        assert "2.5" in html or "2.50" in html  # P90
+        assert "abc123" in html  # Git SHA (may be truncated)
+
+    def test_index_html_css_has_delta_classes(self):
+        """Test that index HTML has CSS classes for delta styling."""
+        import sys
+        script_dir = Path(__file__).parent.parent.parent / "scripts" / "dev"
+        sys.path.insert(0, str(script_dir))
+
+        from update_pages_index import generate_index_html
+
+        manifest = {"runs": [], "updated": None, "latest": None}
+        html = generate_index_html(manifest)
+
+        assert "delta-positive" in html
+        assert "delta-negative" in html
+
+    def test_load_summary_json_function_exists(self):
+        """Test that load_summary_json helper function exists."""
+        import sys
+        script_dir = Path(__file__).parent.parent.parent / "scripts" / "dev"
+        sys.path.insert(0, str(script_dir))
+
+        from update_pages_index import load_summary_json
+
+        assert callable(load_summary_json)
+
+    def test_load_summary_json_returns_none_if_missing(self, tmp_path: Path):
+        """Test that load_summary_json returns None if file doesn't exist."""
+        import sys
+        script_dir = Path(__file__).parent.parent.parent / "scripts" / "dev"
+        sys.path.insert(0, str(script_dir))
+
+        from update_pages_index import load_summary_json
+
+        result = load_summary_json(tmp_path, "nonexistent-run")
+        assert result is None
+
+    def test_load_summary_json_returns_data(self, tmp_path: Path):
+        """Test that load_summary_json returns data if file exists."""
+        import sys
+        script_dir = Path(__file__).parent.parent.parent / "scripts" / "dev"
+        sys.path.insert(0, str(script_dir))
+
+        from update_pages_index import load_summary_json
+
+        # Create summary.json
+        run_dir = tmp_path / "test-run"
+        run_dir.mkdir()
+        summary_data = {"verdict": "PASS", "sharpe_delta": 0.5}
+        (run_dir / "summary.json").write_text(json.dumps(summary_data))
+
+        result = load_summary_json(tmp_path, "test-run")
+
+        assert result is not None
+        assert result["verdict"] == "PASS"
+        assert result["sharpe_delta"] == 0.5
+
+
+# ============================================================
+# Test HTML Minifier (v0.6.4)
+# ============================================================
+
+
+class TestHtmlMinifier:
+    """Tests for HTML minification script."""
+
+    def test_minify_html_script_exists(self):
+        """Test that minify_html.py script exists."""
+        script_path = Path(__file__).parent.parent.parent / "scripts" / "dev" / "minify_html.py"
+        assert script_path.exists()
+
+    def test_minify_html_function_exists(self):
+        """Test that minify_html function is importable."""
+        import sys
+        script_dir = Path(__file__).parent.parent.parent / "scripts" / "dev"
+        sys.path.insert(0, str(script_dir))
+
+        from minify_html import minify_html
+        assert callable(minify_html)
+
+    def test_minify_removes_whitespace(self):
+        """Test that minifier removes unnecessary whitespace."""
+        import sys
+        script_dir = Path(__file__).parent.parent.parent / "scripts" / "dev"
+        sys.path.insert(0, str(script_dir))
+
+        from minify_html import minify_html
+
+        html = """
+        <html>
+            <head>
+                <title>Test</title>
+            </head>
+            <body>
+                <p>Hello   World</p>
+            </body>
+        </html>
+        """
+
+        minified = minify_html(html)
+
+        # Should be smaller
+        assert len(minified) < len(html)
+        # Should remove extra whitespace between tags
+        assert "\n            " not in minified
+
+    def test_minify_removes_comments(self):
+        """Test that minifier removes HTML comments."""
+        import sys
+        script_dir = Path(__file__).parent.parent.parent / "scripts" / "dev"
+        sys.path.insert(0, str(script_dir))
+
+        from minify_html import minify_html
+
+        html = """<html><!-- This is a comment --><body>Content</body></html>"""
+        minified = minify_html(html)
+
+        assert "<!-- This is a comment -->" not in minified
+        assert "Content" in minified
+
+    def test_minify_preserves_pre_content(self):
+        """Test that minifier preserves whitespace in <pre> tags."""
+        import sys
+        script_dir = Path(__file__).parent.parent.parent / "scripts" / "dev"
+        sys.path.insert(0, str(script_dir))
+
+        from minify_html import minify_html
+
+        html = """<html><body><pre>
+    code
+        indented
+</pre></body></html>"""
+        minified = minify_html(html)
+
+        # Should preserve pre content
+        assert "    code" in minified
+        assert "        indented" in minified
+
+    def test_minify_preserves_script_content(self):
+        """Test that minifier preserves <script> content."""
+        import sys
+        script_dir = Path(__file__).parent.parent.parent / "scripts" / "dev"
+        sys.path.insert(0, str(script_dir))
+
+        from minify_html import minify_html
+
+        html = """<html><script>
+function test() {
+    return "hello";
+}
+</script></html>"""
+        minified = minify_html(html)
+
+        # Should preserve script content
+        assert "function test()" in minified
+        assert 'return "hello"' in minified
+
+    def test_minify_file_function_exists(self):
+        """Test that minify_file function exists."""
+        import sys
+        script_dir = Path(__file__).parent.parent.parent / "scripts" / "dev"
+        sys.path.insert(0, str(script_dir))
+
+        from minify_html import minify_file
+        assert callable(minify_file)
+
+    def test_minify_file_overwrites_in_place(self, tmp_path: Path):
+        """Test that minify_file can overwrite file in place."""
+        import sys
+        script_dir = Path(__file__).parent.parent.parent / "scripts" / "dev"
+        sys.path.insert(0, str(script_dir))
+
+        from minify_html import minify_file
+
+        html_file = tmp_path / "test.html"
+        original_content = "<html>\n    <body>\n        <p>Test</p>\n    </body>\n</html>"
+        html_file.write_text(original_content)
+
+        original_size, minified_size = minify_file(html_file)
+
+        assert minified_size < original_size
+        assert html_file.exists()
+        new_content = html_file.read_text()
+        assert len(new_content) < len(original_content)
+
+    def test_minify_reduces_file_size(self, tmp_path: Path):
+        """Test that minification significantly reduces file size."""
+        import sys
+        script_dir = Path(__file__).parent.parent.parent / "scripts" / "dev"
+        sys.path.insert(0, str(script_dir))
+
+        from minify_html import minify_html
+
+        # Create a typical HTML report structure
+        html = """<!DOCTYPE html>
+<html>
+    <head>
+        <title>Regression Report</title>
+        <style>
+            body { margin: 0; padding: 0; }
+        </style>
+    </head>
+    <body>
+        <!-- Header section -->
+        <div class="header">
+            <h1>Report Title</h1>
+        </div>
+
+        <!-- Content section -->
+        <div class="content">
+            <p>Some content here</p>
+            <p>More content here</p>
+        </div>
+
+        <!-- Footer section -->
+        <div class="footer">
+            <p>Footer text</p>
+        </div>
+    </body>
+</html>"""
+
+        minified = minify_html(html)
+
+        # Should be meaningfully smaller
+        assert len(minified) < len(html) * 0.9  # At least 10% reduction
+
+    def test_minify_preserves_functionality(self, tmp_path: Path):
+        """Test that minified HTML still has all essential elements."""
+        import sys
+        script_dir = Path(__file__).parent.parent.parent / "scripts" / "dev"
+        sys.path.insert(0, str(script_dir))
+
+        from minify_html import minify_html
+
+        html = """<html data-theme="light">
+<head><title>Test</title></head>
+<body>
+    <button onclick="toggleTheme()">Toggle</button>
+    <script>function toggleTheme() { console.log('test'); }</script>
+</body>
+</html>"""
+
+        minified = minify_html(html)
+
+        # Should preserve essential elements
+        assert 'data-theme="light"' in minified
+        assert "<title>Test</title>" in minified
+        assert 'onclick="toggleTheme()"' in minified
+        assert "function toggleTheme()" in minified

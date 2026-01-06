@@ -1340,6 +1340,209 @@ python scripts/dev/update_pages_index.py \
 
 ---
 
+## Report Polish II (v0.6.4)
+
+Version 0.6.4 adds enhanced report presentation and per-run metadata:
+
+### PASS/FAIL Status Banner
+
+HTML reports now display a prominent status banner at the top:
+
+- **Sticky placement:** Fixed below header, visible during scrolling
+- **Color-coded:** Green (#28a745) for PASS, red (#dc3545) for FAIL
+- **Summary stats:** Shows Sharpe Δ, P90 timing, and total runs
+- **Theme-aware:** Respects dark/light mode from v0.6.3
+
+### Per-Run Summary Card
+
+Each report includes `summary.json` with key metrics:
+
+```json
+{
+  "schema_version": "1",
+  "run_id": "12345-abc1234",
+  "verdict": "PASS",
+  "sharpe_delta": 0.0234,
+  "trades_delta": null,
+  "timing_p90": 12.5,
+  "git_sha": "abc123def456",
+  "generated_utc": "2026-01-05T12:00:00+00:00"
+}
+```
+
+This enables quick status inspection without parsing full reports.
+
+### Enriched Index Listing
+
+The GitHub Pages index now displays summary stats for each run:
+
+- **Sharpe Δ:** Color-coded positive (green) or negative (red)
+- **P90 timing:** Execution time at 90th percentile
+- **Git SHA:** Short commit hash for traceability
+
+### HTML Minification
+
+Public HTML files are minified to reduce bandwidth:
+
+```bash
+# Minify HTML files in a directory
+python scripts/dev/minify_html.py --input-dir public/reports/latest --pattern "*.html"
+
+# Preview minification (dry run)
+python scripts/dev/minify_html.py --input public/reports/latest/regression_report.html --dry-run
+```
+
+**Minification features:**
+- Removes unnecessary whitespace between tags
+- Strips HTML comments (preserves conditional comments)
+- Preserves `<pre>`, `<script>`, `<style>`, and `<textarea>` content
+- Zero external dependencies (uses stdlib HTMLParser)
+- Typically achieves 10-30% file size reduction
+
+### Updated Integrity Hashes
+
+The `sha256sums.txt` file now includes `summary.json`:
+
+```bash
+# Files included in integrity check
+- regression_report.html
+- regression_report.md
+- baseline_diff.json
+- provenance.json
+- summary.json  # New in v0.6.4
+- plots/*.png
+```
+
+---
+
+## Insights & Trends (v0.6.5)
+
+Version 0.6.5 adds historical analysis, trend visualization, and subscription feeds:
+
+### Run History Aggregation
+
+Build `history.json` from all `summary.json` files in report directories:
+
+```bash
+# Generate history.json with rolling statistics
+python scripts/dev/update_pages_index.py \
+    --manifest public/reports/manifest.json \
+    --reports-dir public/reports \
+    --index-out public/reports/index.html \
+    --history-out public/reports/history.json
+```
+
+**History schema (v1):**
+```json
+{
+  "schema_version": 1,
+  "generated_utc": "2026-01-05T12:00:00Z",
+  "window": 5,
+  "runs": [...],
+  "rolling": {
+    "sharpe_delta": {"mean": 0.018, "stdev": 0.032},
+    "timing_p90": {"mean": 12.5, "stdev": 1.2}
+  }
+}
+```
+
+### Trend Sparklines
+
+The index page displays inline SVG sparklines for Sharpe Delta and P90 timing trends:
+
+- **5-run rolling window:** Shows recent trend direction
+- **Accessible:** ARIA labels and title tooltips
+- **Theme-aware:** Uses CSS custom properties for color
+
+### Flakiness Detection
+
+Automatic detection of unstable metrics across recent runs:
+
+```
+Rule: "flaky" if |Sharpe Δ| mean < 0.02 AND stdev >= 2×|mean| over last 10 runs
+Guard: Requires minimum 6 runs with valid data
+```
+
+When flakiness is detected, a "FLAKY" pill appears next to the header in the index.
+
+### Atom Feed
+
+Subscribe to regression results via RSS/Atom feed:
+
+```bash
+# Generate feed from history.json
+python scripts/dev/make_feed.py \
+    --history public/reports/history.json \
+    --out public/reports/feed.xml \
+    --base-url "https://your-org.github.io/repo" \
+    --max-entries 20
+```
+
+**Feed URL:** https://eyoair21.github.io/Trade_Bot/reports/feed.xml
+
+Each entry includes:
+- Title: PASS/FAIL status with run ID
+- Summary: Sharpe Δ, P90 timing, git SHA
+- Link: Direct to HTML report
+- Categories: pass/fail for filtering
+
+### Search & Filter UI
+
+The index page includes client-side search and filtering:
+
+- **Search:** Filter runs by ID, date, or any text
+- **Verdict filter:** Show All / PASS only / FAIL only
+- **URL state:** Filters persist in URL hash for shareability
+
+### Reports Summarize CLI
+
+Analyze historical trends from the command line:
+
+```bash
+# Text summary of last 30 days
+python -m traderbot.cli.reports summarize \
+    --history reports/history.json \
+    --since 2026-01-01 \
+    --limit 30
+
+# JSON output for scripting
+python -m traderbot.cli.reports summarize \
+    --history reports/history.json \
+    --format json \
+    --out summary.json
+
+# CSV export
+python -m traderbot.cli.reports summarize \
+    --history reports/history.json \
+    --format csv
+```
+
+**Output includes:**
+- Total runs, pass/fail counts, pass rate
+- Sharpe delta mean/stdev
+- Timing P90 mean/stdev
+- Flakiness analysis
+- Recent runs table
+
+### Updated Integrity Hashes
+
+Top-level files are now included in integrity verification:
+
+```bash
+# Generate top-level checksums
+python scripts/dev/generate_sha256sums.py \
+    --report-dir public/reports \
+    --top-level
+
+# Files included:
+# - index.html
+# - history.json
+# - feed.xml
+# - 404.html
+```
+
+---
+
 ## Troubleshooting
 
 ### Windows Console Unicode Issues

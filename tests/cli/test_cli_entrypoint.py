@@ -82,7 +82,7 @@ class TestCLIEntrypoint:
         """Test that version is accessible."""
         from traderbot import __version__
 
-        assert __version__ == "0.6.3"
+        assert __version__ == "0.6.5"
 
     def test_regress_compare_quiet_flag_in_help(self):
         """Test that --quiet flag is documented in compare help."""

@@ -1091,7 +1091,7 @@ def generate_html_report(
     budget: PerfBudget,
     provenance: dict | None = None,
 ) -> str:
-    """Generate HTML regression report with dark/light toggle and provenance footer.
+    """Generate HTML regression report with dark/light toggle, status banner, and provenance footer.
 
     Args:
         verdict: Comparison verdict.
@@ -1106,11 +1106,17 @@ def generate_html_report(
     status_color = "#28a745" if verdict.passed else "#dc3545"
     status_text = "PASS" if verdict.passed else "FAIL"
     status_emoji = "✅" if verdict.passed else "❌"
+    verdict_class = "pass" if verdict.passed else "fail"
     generated_utc = datetime.now(UTC).isoformat()
 
     # Extract provenance info for footer
     prov_sha = provenance.get("git_sha", "unknown") if provenance else "unknown"
     prov_timestamp = provenance.get("generated_utc", generated_utc) if provenance else generated_utc
+
+    # Calculate summary stats for banner
+    sharpe_delta = verdict.metric_delta
+    timing_p90 = current.timing.get("p90", 0.0)
+    total_runs = current.total_runs
 
     html = f"""<!DOCTYPE html>
 <html lang="en" data-theme="light">
@@ -1127,6 +1133,10 @@ def generate_html_report(
             --border-color: #dee2e6;
             --header-bg: #f1f3f4;
             --shadow: rgba(0,0,0,0.1);
+            --pass-color: #28a745;
+            --fail-color: #dc3545;
+            --pass-bg: #d4edda;
+            --fail-bg: #f8d7da;
         }}
         [data-theme="dark"] {{
             --bg-primary: #1a1a2e;
@@ -1136,6 +1146,10 @@ def generate_html_report(
             --border-color: #3f3f46;
             --header-bg: #1e3a5f;
             --shadow: rgba(0,0,0,0.3);
+            --pass-color: #3fb950;
+            --fail-color: #f85149;
+            --pass-bg: #1a3d1a;
+            --fail-bg: #4a1a1a;
         }}
         * {{
             transition: background-color 0.3s, color 0.3s, border-color 0.3s;
@@ -1145,7 +1159,7 @@ def generate_html_report(
             max-width: 900px;
             margin: 0 auto;
             padding: 20px;
-            padding-top: 70px;
+            padding-top: 120px;
             background: var(--bg-primary);
             color: var(--text-primary);
         }}
@@ -1177,6 +1191,39 @@ def generate_html_report(
         }}
         .theme-toggle:hover {{
             opacity: 0.8;
+        }}
+        .verdict-banner {{
+            position: fixed;
+            top: 50px;
+            left: 0;
+            right: 0;
+            padding: 8px 20px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 0.95em;
+            z-index: 999;
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            align-items: center;
+        }}
+        .verdict-banner.pass {{
+            background: var(--pass-bg);
+            color: var(--pass-color);
+            border-bottom: 2px solid var(--pass-color);
+        }}
+        .verdict-banner.fail {{
+            background: var(--fail-bg);
+            color: var(--fail-color);
+            border-bottom: 2px solid var(--fail-color);
+        }}
+        .verdict-banner .stat {{
+            display: inline-block;
+        }}
+        .verdict-banner .stat-label {{
+            font-weight: normal;
+            opacity: 0.8;
+            margin-right: 4px;
         }}
         .badge {{
             display: inline-block;
@@ -1219,8 +1266,8 @@ def generate_html_report(
             background: var(--header-bg);
             font-weight: 600;
         }}
-        .pass {{ color: #28a745; }}
-        .fail {{ color: #dc3545; }}
+        .pass {{ color: var(--pass-color); }}
+        .fail {{ color: var(--fail-color); }}
         .info {{ color: var(--text-secondary); }}
         h1, h2 {{
             margin-top: 0;
@@ -1259,6 +1306,13 @@ def generate_html_report(
     <div class="sticky-header">
         <h1>{status_emoji} Regression: <span class="badge badge-small">{status_text}</span></h1>
         <button class="theme-toggle" onclick="toggleTheme()">Toggle Dark/Light</button>
+    </div>
+
+    <div class="verdict-banner {verdict_class}">
+        <span class="stat"><span class="stat-label">Verdict:</span> {status_text}</span>
+        <span class="stat"><span class="stat-label">Sharpe Δ:</span> {sharpe_delta:+.4f}</span>
+        <span class="stat"><span class="stat-label">P90:</span> {timing_p90:.2f}s</span>
+        <span class="stat"><span class="stat-label">Runs:</span> {total_runs}</span>
     </div>
 
     <div class="header">
@@ -1446,4 +1500,51 @@ def generate_provenance_json(
             "timings": current.used_fallback_timings,
         },
         "notes": [],
+    }
+
+
+def generate_summary_json(
+    run_id: str,
+    verdict: ComparisonVerdict,
+    current: CurrentData,
+    baseline: BaselineData | None = None,
+    git_sha: str = "unknown",
+) -> dict[str, Any]:
+    """Generate summary.json for per-run summary card.
+
+    Schema v1:
+    - run_id: Run identifier (e.g., "12345-abc1234")
+    - verdict: "PASS" or "FAIL"
+    - sharpe_delta: Change in Sharpe ratio from baseline
+    - trades_delta: Change in total trades from baseline (if available)
+    - timing_p90: P90 timing in seconds
+    - git_sha: Git commit SHA
+    - generated_utc: ISO timestamp
+
+    Args:
+        run_id: Run identifier string.
+        verdict: ComparisonVerdict with pass/fail status.
+        current: Current sweep data.
+        baseline: Optional baseline data for computing deltas.
+        git_sha: Git commit SHA.
+
+    Returns:
+        Dictionary for summary.json.
+    """
+    # Calculate trades delta if baseline available
+    trades_delta: int | None = None
+    if baseline is not None:
+        baseline_trades = baseline.summary.get("total_trades", 0)
+        current_trades = current.total_runs
+        trades_delta = current_trades - baseline_trades
+
+    return {
+        "schema_version": "1",
+        "run_id": run_id,
+        "verdict": "PASS" if verdict.passed else "FAIL",
+        "sharpe_delta": round(verdict.metric_delta, 6),
+        "trades_delta": trades_delta,
+        "timing_p90": round(current.timing.get("p90", 0.0), 3),
+        "git_sha": git_sha,
+        "generated_utc": datetime.now(UTC).isoformat(),
     }

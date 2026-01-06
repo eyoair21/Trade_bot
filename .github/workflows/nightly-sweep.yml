@@ -381,8 +381,8 @@ jobs:
               <h1>404</h1>
               <h2>Page Not Found</h2>
               <p>The report you're looking for doesn't exist or has been pruned.</p>
-              <div><a href="/Trade_bot/reports/" class="btn">All Reports</a>
-                   <a href="/Trade_bot/reports/latest/regression_report.html" class="btn">Latest</a></div>
+              <div><a href="./reports/" class="btn">All Reports</a>
+                   <a href="./reports/latest/regression_report.html" class="btn">Latest</a></div>
           </body>
           </html>
           EOF
@@ -401,6 +401,19 @@ jobs:
           find public -type f | head -30
 
           echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
+
+      - name: Ensure public/ has minimal index
+        run: |
+          mkdir -p public
+          if [ ! -f public/index.html ]; then
+            cat > public/index.html <<'HTML'
+<!doctype html><html><head><meta charset="utf-8">
+<title>TraderBot Reports</title></head><body><h1>TraderBot Reports</h1>
+<p>Deployment initializing… reports will appear after first successful run.</p>
+<p><a href="./reports/">View reports</a></p>
+</body></html>
+HTML
+          fi
 
       - name: Configure Pages
         uses: actions/configure-pages@v5

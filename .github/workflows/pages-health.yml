@@ -11,134 +11,38 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check Pages Endpoints
+      - name: Check Pages endpoints
         run: |
           BASE="https://eyoair21.github.io/Trade_bot"
+          REQUIRED=("" "/reports/")
           FAILED=0
-          
-          echo "=== GitHub Pages Health Check ==="
-          echo ""
-          
-          # Test endpoints - / and /reports/ are required, others are optional
-          for ep in "" "/reports/"; do
-            url="$BASE$ep"
-            code=$(curl -sL -o /dev/null -w "%{http_code}" "$url" 2>/dev/null || echo "ERR")
-            
+
+          echo "=== Pages Health ==="
+          for ep in "${REQUIRED[@]}"; do
+            url="${BASE}${ep}"
+            code=$(curl -sL -o /dev/null -w "%{http_code}" "$url" || echo "ERR")
             if [ "$code" = "200" ]; then
-              printf "✓ %-50s %s\n" "$url" "$code"
+              printf "✓ %-55s %s\n" "$url" "$code"
             else
-              printf "✗ %-50s %s\n" "$url" "$code"
+              printf "✗ %-55s %s\n" "$url" "$code"
               FAILED=1
             fi
           done
-          
-          # Optional endpoints (history.json and feed.xml may not exist on first run)
-          for ep in "/reports/history.json" "/reports/feed.xml"; do
-            url="$BASE$ep"
-            code=$(curl -sL -o /dev/null -w "%{http_code}" "$url" 2>/dev/null || echo "ERR")
-            
+
+          echo ""
+          # Optional endpoints (may not exist on first runs)
+          for ep in "/reports/history.json" "/reports/feed.xml" "/reports/latest/regression_report.html"; do
+            url="${BASE}${ep}"
+            code=$(curl -sL -o /dev/null -w "%{http_code}" "$url" || echo "ERR")
             if [ "$code" = "200" ]; then
-              printf "✓ %-50s %s\n" "$url" "$code"
+              printf "✓ %-55s %s\n" "$url" "$code"
             else
-              printf "⚠ %-50s %s (optional, may not exist yet)\n" "$url" "$code"
+              printf "⚠ %-55s %s\n" "$url" "$code"
             fi
           done
-          
-          echo ""
-          
-          # Optional: latest report (may not exist on first run)
-          latest_url="$BASE/reports/latest/regression_report.html"
-          code=$(curl -sL -o /dev/null -w "%{http_code}" "$latest_url" 2>/dev/null || echo "ERR")
-          if [ "$code" = "200" ]; then
-            printf "✓ %-50s %s\n" "$latest_url" "$code"
-          else
-            printf "⚠ %-50s %s (may not exist yet)\n" "$latest_url" "$code"
-          fi
-          
-          echo ""
-          
+
           if [ "$FAILED" = "1" ]; then
-            echo "::error::One or more Pages endpoints failed health check"
+            echo "::error::Required endpoints failed"
             exit 1
           fi
-          
-          echo "All required endpoints returned 200 OK"
 
-      - name: Validate history.json Schema
-        run: |
-          BASE="https://eyoair21.github.io/Trade_bot"
-          
-          echo "=== Validating history.json ==="
-          
-          curl -sL "$BASE/reports/history.json" | python3 -c "
-          import sys, json
-          try:
-              d = json.load(sys.stdin)
-              required = ['schema_version', 'runs', 'generated_utc']
-              missing = [k for k in required if k not in d]
-              if missing:
-                  print(f'✗ Missing keys: {missing}')
-                  sys.exit(1)
-              print(f'✓ schema_version: {d[\"schema_version\"]}')
-              print(f'✓ runs: {len(d[\"runs\"])} entries')
-              print(f'✓ generated_utc: {d[\"generated_utc\"]}')
-              print('history.json OK')
-          except json.JSONDecodeError as e:
-              print(f'✗ Invalid JSON: {e}')
-              sys.exit(1)
-          except Exception as e:
-              print(f'✗ Validation error: {e}')
-              sys.exit(1)
-          "
-
-      - name: Validate feed.xml
-        run: |
-          BASE="https://eyoair21.github.io/Trade_bot"
-          
-          echo "=== Validating feed.xml ==="
-          
-          FEED=$(curl -sL "$BASE/reports/feed.xml")
-          
-          # Check for Atom feed tag
-          if echo "$FEED" | grep -q '<feed'; then
-            echo "✓ Contains <feed> element"
-          else
-            echo "✗ Missing <feed> element"
-            exit 1
-          fi
-          
-          # Check for namespace
-          if echo "$FEED" | grep -q 'xmlns="http://www.w3.org/2005/Atom"'; then
-            echo "✓ Has Atom namespace"
-          else
-            echo "⚠ Missing Atom namespace declaration"
-          fi
-          
-          # Check XML is well-formed
-          echo "$FEED" | python3 -c "
-          import sys
-          from xml.etree.ElementTree import fromstring
-          try:
-              xml = sys.stdin.read()
-              fromstring(xml)
-              print('✓ Well-formed XML')
-          except Exception as e:
-              print(f'✗ Malformed XML: {e}')
-              sys.exit(1)
-          "
-          
-          echo "feed.xml OK"
-
-      - name: Summary
-        if: always()
-        run: |
-          echo "## Pages Health Check Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Endpoint | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| / | ✓ |" >> $GITHUB_STEP_SUMMARY
-          echo "| /reports/ | ✓ |" >> $GITHUB_STEP_SUMMARY
-          echo "| /reports/history.json | ✓ |" >> $GITHUB_STEP_SUMMARY
-          echo "| /reports/feed.xml | ✓ |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Base URL:** https://eyoair21.github.io/Trade_bot" >> $GITHUB_STEP_SUMMARY

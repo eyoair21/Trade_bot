@@ -149,7 +149,7 @@ jobs:
           echo "> **Note:** PR previews are artifacts only. Reports are published to GitHub Pages on merge to main." >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**After merge, report will be available at:**" >> $GITHUB_STEP_SUMMARY
-          echo "- https://eyoair21.github.io/Trade_Bot/reports/latest/regression_report.html" >> $GITHUB_STEP_SUMMARY
+          echo "- https://eyoair21.github.io/Trade_bot/reports/latest/regression_report.html" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           if [ -f runs/sweeps/ci_smoke/regression_report.md ]; then
             echo "### Report Summary" >> $GITHUB_STEP_SUMMARY

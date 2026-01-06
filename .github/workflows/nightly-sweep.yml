@@ -332,7 +332,7 @@ jobs:
           python scripts/dev/make_feed.py \
             --history public/reports/history.json \
             --out public/reports/feed.xml \
-            --base-url "https://eyoair21.github.io/Trade_Bot" \
+            --base-url "https://eyoair21.github.io/Trade_bot" \
             --max-entries 20
 
           # Generate top-level integrity hashes (for index, history, feed)
@@ -379,8 +379,8 @@ jobs:
               <h1>404</h1>
               <h2>Page Not Found</h2>
               <p>The report you're looking for doesn't exist or has been pruned.</p>
-              <div><a href="/Trade_Bot/reports/" class="btn">All Reports</a>
-                   <a href="/Trade_Bot/reports/latest/regression_report.html" class="btn">Latest</a></div>
+              <div><a href="/Trade_bot/reports/" class="btn">All Reports</a>
+                   <a href="/Trade_bot/reports/latest/regression_report.html" class="btn">Latest</a></div>
           </body>
           </html>
           EOF
@@ -419,8 +419,8 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Reports published to GitHub Pages:" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Latest Report:** https://eyoair21.github.io/Trade_Bot/reports/latest/regression_report.html" >> $GITHUB_STEP_SUMMARY
-          echo "- **This Run:** https://eyoair21.github.io/Trade_Bot/reports/$RUN_ID/regression_report.html" >> $GITHUB_STEP_SUMMARY
-          echo "- **All Reports:** https://eyoair21.github.io/Trade_Bot/reports/" >> $GITHUB_STEP_SUMMARY
-          echo "- **Atom Feed:** https://eyoair21.github.io/Trade_Bot/reports/feed.xml" >> $GITHUB_STEP_SUMMARY
-          echo "- **History Data:** https://eyoair21.github.io/Trade_Bot/reports/history.json" >> $GITHUB_STEP_SUMMARY
+          echo "- **Latest Report:** https://eyoair21.github.io/Trade_bot/reports/latest/regression_report.html" >> $GITHUB_STEP_SUMMARY
+          echo "- **This Run:** https://eyoair21.github.io/Trade_bot/reports/$RUN_ID/regression_report.html" >> $GITHUB_STEP_SUMMARY
+          echo "- **All Reports:** https://eyoair21.github.io/Trade_bot/reports/" >> $GITHUB_STEP_SUMMARY
+          echo "- **Atom Feed:** https://eyoair21.github.io/Trade_bot/reports/feed.xml" >> $GITHUB_STEP_SUMMARY
+          echo "- **History Data:** https://eyoair21.github.io/Trade_bot/reports/history.json" >> $GITHUB_STEP_SUMMARY

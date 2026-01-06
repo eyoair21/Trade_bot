@@ -1438,7 +1438,7 @@ def generate_html_report(
     <div class="footer">
         <span class="footer-badge">Built from {prov_sha[:7] if len(prov_sha) > 7 else prov_sha} at {prov_timestamp}</span>
         <br><br>
-        TraderBot Regression Report &bull; <a href="https://github.com/eyoair21/Trade_Bot">GitHub</a>
+        TraderBot Regression Report &bull; <a href="https://github.com/eyoair21/Trade_bot">GitHub</a>
     </div>
 
     <script>

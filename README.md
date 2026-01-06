@@ -3,7 +3,7 @@
 [![CI](https://github.com/eyoair21/Trade_Bot/actions/workflows/ci.yml/badge.svg)](https://github.com/eyoair21/Trade_Bot/actions/workflows/ci.yml)
 [![Nightly Sweep](https://github.com/eyoair21/Trade_Bot/actions/workflows/nightly-sweep.yml/badge.svg)](https://github.com/eyoair21/Trade_Bot/actions/workflows/nightly-sweep.yml)
 ![Regression](badges/regression_status.svg)
-[![Latest Report](https://img.shields.io/badge/report-latest-blue)](https://eyoair21.github.io/Trade_Bot/reports/latest/regression_report.html)
+[![Latest Report](https://img.shields.io/badge/report-latest-blue)](https://eyoair21.github.io/Trade_bot/reports/latest/regression_report.html)
 
 A clean, testable Python repository for paper-trading research with deterministic runs, basic momentum strategy, data/risk scaffolding, and CI.
 
@@ -1240,9 +1240,9 @@ The repository uses GitHub Actions for continuous integration with automatic bad
 
 Regression reports are automatically published to GitHub Pages on successful nightly sweeps:
 
-- **Latest Report:** https://eyoair21.github.io/Trade_Bot/reports/latest/regression_report.html
-- **All Reports Index:** https://eyoair21.github.io/Trade_Bot/reports/
-- **Per-Run Reports:** https://eyoair21.github.io/Trade_Bot/reports/`<run-id>`/
+- **Latest Report:** https://eyoair21.github.io/Trade_bot/reports/latest/regression_report.html
+- **All Reports Index:** https://eyoair21.github.io/Trade_bot/reports/
+- **Per-Run Reports:** https://eyoair21.github.io/Trade_bot/reports/`<run-id>`/
 
 **Report contents:**
 - `regression_report.html` - Styled HTML report with per-metric verdicts
@@ -1478,7 +1478,7 @@ python scripts/dev/make_feed.py \
     --max-entries 20
 ```
 
-**Feed URL:** https://eyoair21.github.io/Trade_Bot/reports/feed.xml
+**Feed URL:** https://eyoair21.github.io/Trade_bot/reports/feed.xml
 
 Each entry includes:
 - Title: PASS/FAIL status with run ID

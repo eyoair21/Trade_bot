@@ -291,10 +291,12 @@ def format_text_summary(stats: dict[str, Any], runs: list[dict[str, Any]], flaky
 
     if stats.get("sharpe_delta_mean") is not None:
         sign = "+" if stats["sharpe_delta_mean"] >= 0 else ""
-        lines.append(f"  Sharpe Delta:   {sign}{stats['sharpe_delta_mean']:.4f} (std: {stats['sharpe_delta_std']:.4f})")
+        std_str = f"{stats['sharpe_delta_std']:.4f}" if stats.get("sharpe_delta_std") is not None else "N/A"
+        lines.append(f"  Sharpe Delta:   {sign}{stats['sharpe_delta_mean']:.4f} (std: {std_str})")
 
     if stats.get("timing_p90_mean") is not None:
-        lines.append(f"  Timing P90:     {stats['timing_p90_mean']:.2f}s (std: {stats['timing_p90_std']:.2f}s)")
+        std_str = f"{stats['timing_p90_std']:.2f}" if stats.get("timing_p90_std") is not None else "N/A"
+        lines.append(f"  Timing P90:     {stats['timing_p90_mean']:.2f}s (std: {std_str}s)")
 
     lines.append("")
 

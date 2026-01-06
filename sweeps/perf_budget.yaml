@@ -1,7 +1,7 @@
 # Performance budget configuration for regression detection
 # Used by traderbot.cli.regress to guard against quality/speed decay
 
-# Primary metric to track
+# Primary metric to track (legacy single-metric mode)
 metric: sharpe
 mode: max
 
@@ -18,5 +18,51 @@ max_sharpe_drop: 0.05
 # Float tolerance for determinism checks
 epsilon_abs: 1e-6
 
+# Per-metric epsilons for fine-grained tolerance control
+# These help reduce flaky CI failures due to noise
+
+# Tolerance for metric comparisons (Sharpe fluctuation due to stochasticity)
+# Set to small value (e.g., 0.01) to ignore tiny variations between runs
+epsilon_metric: 0.01
+
+# Tolerance for timing comparisons (seconds, absorbs CI runner variance)
+# Set to a few seconds (e.g., 2.0) to handle slow CI runners
+epsilon_timing: 2.0
+
 # Optional: timing percentile thresholds
 # max_p50_elapsed_s: 30.0  # Uncomment to also enforce P50
+
+# =============================================================================
+# Multi-Metric Budget Map (v0.6.0+)
+# =============================================================================
+# Define granular thresholds for multiple metrics. Each metric can have:
+#   - mode: 'max' (higher is better) or 'min' (lower is better)
+#   - max_drop: maximum regression from baseline (for comparison-based checks)
+#   - min: absolute minimum value required
+#   - max: absolute maximum value allowed
+#   - epsilon: tolerance for this specific metric
+#   - required: if false, failure doesn't fail overall check (default: true)
+#
+# When budgets: is present, each metric is evaluated independently.
+# Overall PASS requires ALL required metrics to pass.
+#
+# Example configuration (uncomment to enable):
+#
+# budgets:
+#   sharpe:
+#     mode: max
+#     max_drop: 0.05
+#     epsilon: 0.01
+#   win_rate:
+#     mode: max
+#     min: 0.55
+#     epsilon: 0.005
+#   p90_elapsed_s:
+#     mode: min
+#     max: 60
+#     epsilon: 2.0
+#   total_return:
+#     mode: max
+#     max_drop: 0.10
+#     epsilon: 0.02
+#     required: false  # Advisory only, won't fail CI

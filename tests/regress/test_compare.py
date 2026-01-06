@@ -10,10 +10,15 @@ from traderbot.metrics.compare import (
     BaselineData,
     CurrentData,
     PerfBudget,
+    VarianceEntry,
     compare_results,
     create_new_baseline,
     generate_baseline_diff,
+    generate_html_report,
+    generate_provenance_json,
     generate_regression_report,
+    generate_variance_markdown,
+    generate_variance_report,
     load_baseline,
     load_current_data,
     load_perf_budget,
@@ -663,3 +668,378 @@ epsilon_abs: "1e-6"
         assert loaded_baseline.summary["total_runs"] == sample_current_pass.total_runs
         assert loaded_baseline.timing["p50"] == sample_current_pass.timing["p50"]
         assert loaded_baseline.timing["p90"] == sample_current_pass.timing["p90"]
+
+
+# ============================================================
+# Test per-metric epsilon support (Phase 5.3)
+# ============================================================
+
+
+class TestPerMetricEpsilon:
+    """Tests for per-metric epsilon support."""
+
+    def test_epsilon_metric_default_none(self):
+        """Test that epsilon_metric defaults to None."""
+        budget = PerfBudget()
+        assert budget.epsilon_metric is None
+        assert budget.epsilon_timing is None
+
+    def test_epsilon_metric_custom_value(self):
+        """Test epsilon_metric with custom value."""
+        budget = PerfBudget(epsilon_metric=0.01, epsilon_timing=2.0)
+        assert budget.epsilon_metric == 0.01
+        assert budget.epsilon_timing == 2.0
+
+    def test_load_perf_budget_with_epsilons(self, tmp_path: Path):
+        """Test loading budget with per-metric epsilons from YAML."""
+        budget_yaml = """
+metric: sharpe
+mode: max
+min_success_rate: 0.75
+max_p90_elapsed_s: 60.0
+max_sharpe_drop: 0.05
+epsilon_abs: 1e-6
+epsilon_metric: 0.01
+epsilon_timing: 2.0
+"""
+        budget_path = tmp_path / "budget.yaml"
+        budget_path.write_text(budget_yaml)
+
+        budget = load_perf_budget(budget_path)
+        assert budget.epsilon_metric == 0.01
+        assert budget.epsilon_timing == 2.0
+
+    def test_epsilon_metric_helps_pass_metric_check(self, sample_baseline: BaselineData):
+        """Test that epsilon_metric provides tolerance for metric comparisons."""
+        # Baseline best_metric = 1.5, max_sharpe_drop = 0.05
+        # Current = 1.44 (drop of 0.06, which exceeds 0.05 threshold)
+        # With epsilon_metric = 0.02, effective delta is lenient by 0.02
+        # So effective drop becomes 0.04 < 0.05, which passes
+        budget_with_epsilon = PerfBudget(
+            max_sharpe_drop=0.05,
+            epsilon_metric=0.02,
+        )
+        budget_without_epsilon = PerfBudget(
+            max_sharpe_drop=0.05,
+            epsilon_metric=None,
+        )
+
+        current = CurrentData(
+            best_metric=1.44,  # 0.06 drop from baseline 1.5
+            success_rate=1.0,
+            total_runs=10,
+            timing={"p50": 10.0, "p90": 20.0},
+            leaderboard=[],
+        )
+
+        verdict_with = compare_results(current, sample_baseline, budget_with_epsilon)
+        verdict_without = compare_results(current, sample_baseline, budget_without_epsilon)
+
+        # With epsilon_metric = 0.02, should pass
+        assert verdict_with.metric_passed is True
+        # Without epsilon, should fail (0.06 > 0.05)
+        assert verdict_without.metric_passed is False
+
+    def test_epsilon_timing_helps_pass_timing_check(self, sample_baseline: BaselineData):
+        """Test that epsilon_timing provides tolerance for timing comparisons."""
+        # Budget max_p90 = 60s, epsilon_timing = 2s
+        # Current P90 = 61s (1s over budget)
+        # With epsilon, effective max = 62s, so 61 passes
+        budget_with_epsilon = PerfBudget(
+            max_p90_elapsed_s=60.0,
+            epsilon_timing=2.0,
+        )
+        budget_without_epsilon = PerfBudget(
+            max_p90_elapsed_s=60.0,
+            epsilon_timing=None,
+        )
+
+        current = CurrentData(
+            best_metric=1.5,
+            success_rate=1.0,
+            total_runs=10,
+            timing={"p50": 30.0, "p90": 61.0},  # 1s over budget
+            leaderboard=[],
+        )
+
+        verdict_with = compare_results(current, sample_baseline, budget_with_epsilon)
+        verdict_without = compare_results(current, sample_baseline, budget_without_epsilon)
+
+        # With epsilon_timing = 2.0, should pass (61 <= 60 + 2)
+        assert verdict_with.timing_passed is True
+        # Without epsilon, should fail (61 > 60)
+        assert verdict_without.timing_passed is False
+
+    def test_epsilon_in_details_output(self, sample_baseline: BaselineData):
+        """Test that epsilon values appear in verdict details."""
+        budget = PerfBudget(
+            epsilon_metric=0.01,
+            epsilon_timing=2.0,
+        )
+        current = CurrentData(
+            best_metric=1.5,
+            success_rate=1.0,
+            total_runs=10,
+            timing={"p50": 10.0, "p90": 20.0},
+            leaderboard=[],
+        )
+
+        verdict = compare_results(current, sample_baseline, budget)
+
+        # Epsilon should be recorded in details
+        assert verdict.details["metric"]["epsilon"] == 0.01
+        assert verdict.details["timing"]["epsilon"] == 2.0
+
+
+# ============================================================
+# Test variance analysis (Phase 5.4)
+# ============================================================
+
+
+class TestVarianceAnalysis:
+    """Tests for variance analysis and reporting."""
+
+    def test_variance_entry_creation(self):
+        """Test VarianceEntry dataclass creation."""
+        entry = VarianceEntry(
+            run_idx=0,
+            metric_name="avg_oos_sharpe",
+            values=[1.0, 1.1, 0.9],
+            mean=1.0,
+            std=0.0816,
+            cv=0.0816,
+            is_flaky=False,
+        )
+        assert entry.run_idx == 0
+        assert entry.metric_name == "avg_oos_sharpe"
+        assert len(entry.values) == 3
+        assert entry.is_flaky is False
+
+    def test_variance_entry_flagged_flaky(self):
+        """Test VarianceEntry correctly flagged as flaky."""
+        entry = VarianceEntry(
+            run_idx=1,
+            metric_name="avg_oos_sharpe",
+            values=[1.0, 2.0, 0.5],  # High variance
+            mean=1.17,
+            std=0.62,
+            cv=0.53,
+            is_flaky=True,
+        )
+        assert entry.is_flaky is True
+        assert entry.cv > 0.1
+
+    def test_generate_variance_report_empty(self):
+        """Test variance report with empty entries."""
+        report = generate_variance_report([], threshold=0.1)
+        assert report["total_entries"] == 0
+        assert report["flaky_count"] == 0
+        assert report["flaky_rate"] == 0.0
+        assert report["entries"] == []
+
+    def test_generate_variance_report_with_entries(self):
+        """Test variance report generation with entries."""
+        entries = [
+            VarianceEntry(
+                run_idx=0,
+                metric_name="avg_oos_sharpe",
+                values=[1.5, 1.48, 1.52],
+                mean=1.5,
+                std=0.016,
+                cv=0.011,
+                is_flaky=False,
+            ),
+            VarianceEntry(
+                run_idx=1,
+                metric_name="avg_oos_sharpe",
+                values=[1.2, 0.8, 1.6],  # High variance
+                mean=1.2,
+                std=0.33,
+                cv=0.275,
+                is_flaky=True,
+            ),
+        ]
+        report = generate_variance_report(entries, threshold=0.1)
+
+        assert report["total_entries"] == 2
+        assert report["flaky_count"] == 1
+        assert report["flaky_rate"] == 0.5
+        assert len(report["entries"]) == 2
+        assert report["threshold"] == 0.1
+        assert "generated_utc" in report
+
+    def test_generate_variance_markdown_empty(self):
+        """Test variance markdown with empty entries."""
+        md = generate_variance_markdown([], threshold=0.1)
+        assert "Variance Analysis Report" in md
+        assert "No entries to analyze" in md
+
+    def test_generate_variance_markdown_with_entries(self):
+        """Test variance markdown generation with entries."""
+        entries = [
+            VarianceEntry(
+                run_idx=0,
+                metric_name="avg_oos_sharpe",
+                values=[1.5],
+                mean=1.5,
+                std=0.0,
+                cv=0.0,
+                is_flaky=False,
+            ),
+            VarianceEntry(
+                run_idx=1,
+                metric_name="avg_oos_sharpe",
+                values=[1.2],
+                mean=1.2,
+                std=0.0,
+                cv=0.0,
+                is_flaky=False,
+            ),
+        ]
+        md = generate_variance_markdown(entries, threshold=0.1)
+
+        assert "Variance Analysis Report" in md
+        assert "| Run Idx | Metric | Mean | Std | CV | Flaky |" in md
+        assert "| 0 |" in md
+        assert "| 1 |" in md
+
+    def test_generate_variance_markdown_shows_flaky_entries(self):
+        """Test that flaky entries are highlighted in markdown."""
+        entries = [
+            VarianceEntry(
+                run_idx=5,
+                metric_name="avg_oos_sharpe",
+                values=[1.0, 1.5, 0.5],
+                mean=1.0,
+                std=0.41,
+                cv=0.41,
+                is_flaky=True,
+            ),
+        ]
+        md = generate_variance_markdown(entries, threshold=0.1)
+
+        assert "Flaky Entries (CV > threshold)" in md
+        assert "Run 5" in md
+        assert "⚠️" in md
+
+
+# ============================================================
+# Test HTML report and provenance (Phase 5.5)
+# ============================================================
+
+
+class TestHTMLReport:
+    """Tests for HTML report generation."""
+
+    def test_generate_html_report_pass(
+        self,
+        sample_current_pass: CurrentData,
+        sample_baseline: BaselineData,
+        sample_budget: PerfBudget,
+    ):
+        """Test HTML report generation for passing comparison."""
+        verdict = compare_results(sample_current_pass, sample_baseline, sample_budget)
+        html = generate_html_report(verdict, sample_current_pass, sample_baseline, sample_budget)
+
+        assert "<!DOCTYPE html>" in html
+        assert "Regression Report" in html
+        assert "PASS" in html
+        assert "#28a745" in html  # Green color
+        assert sample_baseline.git_sha in html
+        assert "✅" in html
+
+    def test_generate_html_report_fail(
+        self,
+        sample_current_fail_metric: CurrentData,
+        sample_baseline: BaselineData,
+        sample_budget: PerfBudget,
+    ):
+        """Test HTML report generation for failing comparison."""
+        verdict = compare_results(sample_current_fail_metric, sample_baseline, sample_budget)
+        html = generate_html_report(verdict, sample_current_fail_metric, sample_baseline, sample_budget)
+
+        assert "<!DOCTYPE html>" in html
+        assert "Regression Report" in html
+        assert "FAIL" in html
+        assert "#dc3545" in html  # Red color
+        assert "❌" in html
+
+    def test_html_contains_metrics_table(
+        self,
+        sample_current_pass: CurrentData,
+        sample_baseline: BaselineData,
+        sample_budget: PerfBudget,
+    ):
+        """Test HTML report contains metrics table."""
+        verdict = compare_results(sample_current_pass, sample_baseline, sample_budget)
+        html = generate_html_report(verdict, sample_current_pass, sample_baseline, sample_budget)
+
+        # Check for table headers
+        assert "<th>Check</th>" in html
+        assert "<th>Status</th>" in html
+        assert "<th>Current</th>" in html
+        assert "<th>Baseline</th>" in html
+        assert "<th>Delta</th>" in html
+
+        # Check for metric rows
+        assert "Timing P90" in html
+        assert "Success Rate" in html
+
+
+class TestProvenanceJSON:
+    """Tests for provenance.json generation."""
+
+    def test_generate_provenance_no_fallbacks(self):
+        """Test provenance when no fallbacks are used."""
+        current = CurrentData(
+            best_metric=1.5,
+            success_rate=1.0,
+            total_runs=10,
+            timing={"p50": 10.0, "p90": 20.0},
+            leaderboard=[],
+            used_fallback_leaderboard=False,
+            used_fallback_timings=False,
+        )
+        provenance = generate_provenance_json(current)
+
+        assert "generated_utc" in provenance
+        assert provenance["data_sources"]["leaderboard"] == "leaderboard.csv"
+        assert provenance["data_sources"]["timings"] == "timings.csv"
+        assert provenance["fallbacks_used"]["leaderboard"] is False
+        assert provenance["fallbacks_used"]["timings"] is False
+
+    def test_generate_provenance_with_fallbacks(self):
+        """Test provenance when fallbacks are used."""
+        current = CurrentData(
+            best_metric=1.5,
+            success_rate=1.0,
+            total_runs=10,
+            timing={"p50": 10.0, "p90": 20.0},
+            leaderboard=[],
+            used_fallback_leaderboard=True,
+            used_fallback_timings=True,
+        )
+        provenance = generate_provenance_json(current)
+
+        assert provenance["data_sources"]["leaderboard"] == "all_results.json"
+        assert provenance["data_sources"]["timings"] == "all_results.json"
+        assert provenance["fallbacks_used"]["leaderboard"] is True
+        assert provenance["fallbacks_used"]["timings"] is True
+
+    def test_provenance_structure(self):
+        """Test provenance JSON has expected structure."""
+        current = CurrentData(
+            best_metric=1.5,
+            success_rate=1.0,
+            total_runs=10,
+            timing={"p50": 10.0, "p90": 20.0},
+            leaderboard=[],
+        )
+        provenance = generate_provenance_json(current)
+
+        # Check required fields
+        assert "generated_utc" in provenance
+        assert "data_sources" in provenance
+        assert "fallbacks_used" in provenance
+        assert "notes" in provenance
+        assert isinstance(provenance["notes"], list)

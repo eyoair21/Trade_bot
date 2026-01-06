@@ -82,4 +82,28 @@ class TestCLIEntrypoint:
         """Test that version is accessible."""
         from traderbot import __version__
 
-        assert __version__ == "0.5.3"
+        assert __version__ == "0.6.3"
+
+    def test_regress_compare_quiet_flag_in_help(self):
+        """Test that --quiet flag is documented in compare help."""
+        env = {**os.environ, "PYTHONPATH": str(_PROJECT_ROOT)}
+        result = subprocess.run(
+            [sys.executable, "-m", "traderbot.cli.regress", "compare", "--help"],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        assert result.returncode == 0, f"stderr: {result.stderr}"
+        assert "--quiet" in result.stdout or "-q" in result.stdout
+
+    def test_regress_compare_auto_update_flag_in_help(self):
+        """Test that --auto-update-on-pass flag is documented in compare help."""
+        env = {**os.environ, "PYTHONPATH": str(_PROJECT_ROOT)}
+        result = subprocess.run(
+            [sys.executable, "-m", "traderbot.cli.regress", "compare", "--help"],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        assert result.returncode == 0, f"stderr: {result.stderr}"
+        assert "--auto-update-on-pass" in result.stdout

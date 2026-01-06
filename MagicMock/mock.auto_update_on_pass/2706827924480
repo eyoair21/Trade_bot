@@ -1,0 +1,41 @@
+{
+  "git_sha": "aee525b",
+  "created_utc": "2026-01-05T23:01:09.259490+00:00",
+  "metric": "sharpe",
+  "mode": "max",
+  "leaderboard": [
+    {
+      "rank": 1.0,
+      "run_idx": 1.0,
+      "avg_oos_sharpe": 1.5,
+      "avg_oos_return_pct": 12.0,
+      "avg_oos_max_dd_pct": -8.0,
+      "total_oos_trades": 60.0
+    },
+    {
+      "rank": 2.0,
+      "run_idx": 2.0,
+      "avg_oos_sharpe": 1.3,
+      "avg_oos_return_pct": 11.0,
+      "avg_oos_max_dd_pct": -6.0,
+      "total_oos_trades": 55.0
+    },
+    {
+      "rank": 3.0,
+      "run_idx": 0.0,
+      "avg_oos_sharpe": 1.2,
+      "avg_oos_return_pct": 10.0,
+      "avg_oos_max_dd_pct": -5.0,
+      "total_oos_trades": 50.0
+    }
+  ],
+  "timing": {
+    "p50": 18.0,
+    "p90": 19.6
+  },
+  "summary": {
+    "best_metric": 1.5,
+    "success_rate": 1.0,
+    "total_runs": 3
+  }
+}

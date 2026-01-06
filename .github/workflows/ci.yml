@@ -8,6 +8,8 @@ on:
 
 jobs:
   lint-and-test:
+    # Skip if this is a badge commit from github-actions[bot]
+    if: github.actor != 'github-actions[bot]'
     name: Lint & Test (Python ${{ matrix.python-version }}, ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     
@@ -106,10 +108,53 @@ jobs:
         run: |
           python -m traderbot.cli.regress compare \
             --no-emoji \
+            --html \
             --current runs/sweeps/ci_smoke \
             --baseline benchmarks/baseline.json \
             --budget sweeps/perf_budget.yaml \
             --out runs/sweeps/ci_smoke/regression_report.md
+
+      - name: Generate status badge
+        if: always()
+        run: |
+          python scripts/generate_status_badge.py \
+            --from-diff runs/sweeps/ci_smoke/baseline_diff.json \
+            --output badges/regression_status.svg \
+            --sha ${{ github.sha }}
+        continue-on-error: true
+
+      - name: Generate integrity hashes
+        if: always()
+        run: |
+          python scripts/dev/generate_sha256sums.py \
+            --report-dir runs/sweeps/ci_smoke
+        continue-on-error: true
+
+      - name: Add badge to job summary
+        if: always()
+        run: |
+          echo "## Regression Status" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f runs/sweeps/ci_smoke/baseline_diff.json ]; then
+            passed=$(python -c "import json; d=json.load(open('runs/sweeps/ci_smoke/baseline_diff.json')); print('true' if d.get('passed', False) else 'false')")
+            if [ "$passed" = "true" ]; then
+              echo "![Regression PASS](https://img.shields.io/badge/regression-PASS-brightgreen)" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "![Regression FAIL](https://img.shields.io/badge/regression-FAIL-red)" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "![Regression UNKNOWN](https://img.shields.io/badge/regression-UNKNOWN-lightgrey)" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "> **Note:** PR previews are artifacts only. Reports are published to GitHub Pages on merge to main." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**After merge, report will be available at:**" >> $GITHUB_STEP_SUMMARY
+          echo "- https://eyoair21.github.io/Trade_Bot/reports/latest/regression_report.html" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f runs/sweeps/ci_smoke/regression_report.md ]; then
+            echo "### Report Summary" >> $GITHUB_STEP_SUMMARY
+            head -50 runs/sweeps/ci_smoke/regression_report.md >> $GITHUB_STEP_SUMMARY
+          fi
 
       - name: Upload regression report
         if: always()
@@ -118,7 +163,11 @@ jobs:
           name: regression-report-${{ github.sha }}
           path: |
             runs/sweeps/ci_smoke/regression_report.md
+            runs/sweeps/ci_smoke/regression_report.html
             runs/sweeps/ci_smoke/baseline_diff.json
+            runs/sweeps/ci_smoke/provenance.json
+            runs/sweeps/ci_smoke/sha256sums.txt
+            badges/regression_status.svg
           retention-days: 7
 
       - name: Comment on PR with regression status
@@ -148,3 +197,70 @@ jobs:
               repo: context.repo.repo,
               body: body
             });
+
+  badge-commit:
+    name: Badge Commit (Main Only)
+    runs-on: ubuntu-latest
+    # Only run on main branch push, skip badge commits from github-actions[bot]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && github.actor != 'github-actions[bot]'
+    needs: lint-and-test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas numpy pyarrow python-dotenv pyyaml
+
+      - name: Generate sample data
+        run: |
+          python scripts/make_sample_data.py
+
+      - name: Run CI smoke sweep
+        run: |
+          python -m traderbot.cli.sweep sweeps/ci_smoke.yaml --workers 2 --time
+
+      - name: Run regression comparison
+        id: regress
+        run: |
+          python -m traderbot.cli.regress compare \
+            --no-emoji \
+            --current runs/sweeps/ci_smoke \
+            --baseline benchmarks/baseline.json \
+            --budget sweeps/perf_budget.yaml \
+            --out runs/sweeps/ci_smoke/regression_report.md
+
+      - name: Generate status badge
+        if: steps.regress.outcome == 'success'
+        run: |
+          python scripts/generate_status_badge.py \
+            --from-diff runs/sweeps/ci_smoke/baseline_diff.json \
+            --output badges/regression_status.svg \
+            --sha ${{ github.sha }}
+
+      - name: Commit badge to repo
+        if: steps.regress.outcome == 'success'
+        run: |
+          # Configure git for github-actions[bot]
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Check if badge file changed
+          if git diff --quiet badges/regression_status.svg 2>/dev/null; then
+            echo "Badge unchanged, skipping commit"
+          else
+            git add badges/regression_status.svg
+            git commit -m "chore: update regression badge [ci skip]"
+            git push
+            echo "Badge committed and pushed"
+          fi

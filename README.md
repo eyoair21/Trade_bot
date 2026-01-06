@@ -2,6 +2,8 @@
 
 [![CI](https://github.com/eyoair21/Trade_Bot/actions/workflows/ci.yml/badge.svg)](https://github.com/eyoair21/Trade_Bot/actions/workflows/ci.yml)
 [![Nightly Sweep](https://github.com/eyoair21/Trade_Bot/actions/workflows/nightly-sweep.yml/badge.svg)](https://github.com/eyoair21/Trade_Bot/actions/workflows/nightly-sweep.yml)
+![Regression](badges/regression_status.svg)
+[![Latest Report](https://img.shields.io/badge/report-latest-blue)](https://eyoair21.github.io/Trade_Bot/reports/latest/regression_report.html)
 
 A clean, testable Python repository for paper-trading research with deterministic runs, basic momentum strategy, data/risk scaffolding, and CI.
 
@@ -941,6 +943,403 @@ For more details, see [PHASE52_SUMMARY.md](PHASE52_SUMMARY.md).
 
 ---
 
+## Phase 5.3+: Advanced Regression Features
+
+Phase 5.3+ adds advanced regression detection, variance analysis, and reporting:
+
+### Regression Check in 60 Seconds
+
+Get started with regression detection in under a minute:
+
+```bash
+# 1. Generate sample data (skip if already done)
+python scripts/make_sample_data.py
+
+# 2. Run a quick sweep
+python -m traderbot.cli.sweep sweeps/ci_smoke.yaml --workers 2
+
+# 3. Generate leaderboard
+python -m traderbot.cli.leaderboard runs/sweeps/ci_smoke
+
+# 4. Run regression check
+python -m traderbot.cli.regress compare \
+    --current runs/sweeps/ci_smoke \
+    --baseline benchmarks/baseline.json \
+    --budget sweeps/perf_budget.yaml
+
+# Exit code: 0 = PASS, 1 = FAIL
+```
+
+### Per-Metric Tolerance (Reducing Flaky CI)
+
+Configure separate tolerances for metrics and timing to absorb normal variance:
+
+```yaml
+# sweeps/perf_budget.yaml
+epsilon_metric: 0.01     # Absorb Sharpe variations up to 0.01
+epsilon_timing: 2.0      # Absorb timing variations up to 2 seconds
+```
+
+### Quiet Mode
+
+Suppress console output while still writing reports:
+
+```bash
+python -m traderbot.cli.regress compare \
+    --quiet \
+    --current runs/sweeps/ci_smoke \
+    --baseline benchmarks/baseline.json \
+    --budget sweeps/perf_budget.yaml
+
+# Exit code still reflects pass/fail
+# Reports are still written to disk
+```
+
+### Variance Analysis (Flakiness Detection)
+
+Analyze result variance to detect non-deterministic configurations:
+
+```bash
+python -m traderbot.cli.regress compare \
+    --reruns 3 \
+    --variance-threshold 0.10 \
+    --current runs/sweeps/ci_smoke \
+    --baseline benchmarks/baseline.json \
+    --budget sweeps/perf_budget.yaml
+
+# Generates variance_report.json with:
+# - Coefficient of variation (CV) for each configuration
+# - Flaky flag if CV > threshold
+```
+
+### HTML Reports
+
+Generate styled HTML reports with pass/fail badges:
+
+```bash
+python -m traderbot.cli.regress compare \
+    --html \
+    --current runs/sweeps/ci_smoke \
+    --baseline benchmarks/baseline.json \
+    --budget sweeps/perf_budget.yaml
+
+# Generates:
+# - regression_report.md (markdown)
+# - regression_report.html (styled HTML)
+# - baseline_diff.json (deltas)
+# - provenance.json (data source tracking)
+```
+
+### Auto-Update Baseline on Pass
+
+Automatically update baseline when regression check passes:
+
+```bash
+python -m traderbot.cli.regress compare \
+    --auto-update-on-pass benchmarks/baseline.json \
+    --current runs/sweeps/ci_smoke \
+    --baseline benchmarks/baseline.json \
+    --budget sweeps/perf_budget.yaml
+
+# On PASS: Updates baseline with current metrics
+# On FAIL: No changes made
+```
+
+### Trend Plots (Nightly Tracking)
+
+The nightly workflow generates trend plots tracking metrics over time:
+
+```bash
+# Generate trend plots manually
+python scripts/generate_trend_plots.py \
+    --trend-file runs/sweeps/trend_data.json \
+    --current-diff runs/sweeps/ci_smoke/baseline_diff.json \
+    --output-dir runs/sweeps/ci_smoke/plots
+
+# Generates:
+# - trend_metric.png (best Sharpe over time)
+# - trend_success_rate.png (success rate over time)
+# - trend_timing.png (P90 timing over time)
+# - trend_dashboard.png (combined 4-panel dashboard)
+```
+
+### Full CLI Reference
+
+```bash
+python -m traderbot.cli.regress compare --help
+
+# Key flags:
+#   --no-emoji              Disable emoji (Windows/CI)
+#   --quiet, -q             Suppress console output
+#   --html                  Generate HTML report
+#   --reruns N              Analyze top N for variance
+#   --variance-threshold σ  CV threshold for flakiness (default: 0.1)
+#   --auto-update-on-pass   Auto-update baseline on success
+```
+
+### Nightly Workflow Outputs
+
+The nightly sweep produces:
+- `regression_report.md` - Markdown summary
+- `regression_report.html` - Styled HTML with badge
+- `baseline_diff.json` - Computed deltas
+- `provenance.json` - Data source tracking
+- `variance_report.json` - Flakiness analysis
+- `plots/` - Trend visualizations
+- `trend_data.json` - Rolling 90-day history
+
+---
+
+## Phase 5.4: Per-Metric Budgets & Status Badges (v0.6.0)
+
+Phase 5.4 adds granular multi-metric budget evaluation and status badge generation for CI dashboards.
+
+### Per-Metric Budget Configuration
+
+Define individual thresholds for multiple metrics in `sweeps/perf_budget.yaml`:
+
+```yaml
+# Multi-Metric Budget Map (v0.6.0+)
+budgets:
+  sharpe:
+    mode: max           # Higher is better
+    max_drop: 0.05      # Max 5% drop from baseline
+    epsilon: 0.01       # Tolerance for fluctuations
+  win_rate:
+    mode: max
+    min: 0.55           # Absolute minimum required
+    epsilon: 0.005
+  p90_elapsed_s:
+    mode: min           # Lower is better
+    max: 60             # Maximum allowed value
+    epsilon: 2.0
+  total_return:
+    mode: max
+    max_drop: 0.10
+    epsilon: 0.02
+    required: false     # Advisory only, won't fail CI
+```
+
+**Budget fields per metric:**
+- `mode`: `max` (higher is better) or `min` (lower is better)
+- `max_drop`: Maximum regression from baseline (comparison-based)
+- `min`: Absolute minimum value required
+- `max`: Absolute maximum value allowed
+- `epsilon`: Tolerance for this specific metric
+- `required`: If `false`, failure doesn't fail overall check (default: `true`)
+
+### Backward Compatibility
+
+The new `budgets:` map is backward-compatible with the existing single-metric format:
+
+```yaml
+# Legacy single-metric mode (still supported)
+metric: sharpe
+mode: max
+max_sharpe_drop: 0.05
+epsilon_metric: 0.01
+```
+
+When `budgets:` is present, each metric is evaluated independently. Overall PASS requires ALL required metrics to pass.
+
+### Per-Metric Report Output
+
+Regression reports now include a per-metric verdicts table:
+
+```markdown
+### Per-Metric Budget Verdicts
+
+| Metric | Status | Current | Baseline | Delta | Threshold | Mode |
+|--------|--------|---------|----------|-------|-----------|------|
+| sharpe | PASS | 1.52 | 1.50 | +0.02 | 0.05 | max |
+| win_rate | PASS | 0.58 | N/A | N/A | 0.55 | max |
+| p90_elapsed_s | FAIL | 65.3 | N/A | N/A | 60.0 | min |
+```
+
+### Status Badge Generation
+
+Generate deterministic SVG badges for CI dashboards:
+
+```bash
+# Generate badge from regression diff
+python scripts/generate_status_badge.py \
+    --from-diff runs/sweeps/ci_smoke/baseline_diff.json \
+    --output badges/regression_status.svg \
+    --sha $(git rev-parse --short HEAD)
+
+# Generate badge with explicit status
+python scripts/generate_status_badge.py \
+    --status pass \
+    --output badges/regression_status.svg
+```
+
+**Badge features:**
+- Shields.io-style SVG (deterministic, <10KB)
+- Green (#28a745) for PASS, Red (#dc3545) for FAIL
+- Embedded SHA and timestamp metadata
+- No external dependencies or network calls
+
+### CI Integration
+
+Both CI workflows now generate and upload status badges:
+
+**Nightly Sweep (`nightly-sweep.yml`):**
+- Generates badge after regression check
+- Uploads as `status-badge` artifact (30-day retention)
+
+**PR Checks (`ci.yml`):**
+- Generates badge in regression-check job
+- Adds pass/fail badge to GitHub job summary
+- Includes report summary in PR comments
+
+### Example: Multi-Metric Workflow
+
+```bash
+# 1. Run sweep
+python -m traderbot.cli.sweep sweeps/ci_smoke.yaml --workers 2
+
+# 2. Generate leaderboard
+python -m traderbot.cli.leaderboard runs/sweeps/ci_smoke
+
+# 3. Run multi-metric regression check
+python -m traderbot.cli.regress compare \
+    --html \
+    --current runs/sweeps/ci_smoke \
+    --baseline benchmarks/baseline.json \
+    --budget sweeps/perf_budget.yaml
+
+# 4. Generate status badge
+python scripts/generate_status_badge.py \
+    --from-diff runs/sweeps/ci_smoke/baseline_diff.json \
+    --output badges/regression_status.svg
+
+# Review outputs:
+# - regression_report.md (per-metric verdicts table)
+# - regression_report.html (styled HTML)
+# - badges/regression_status.svg (CI badge)
+```
+
+---
+
+## CI & Badges
+
+The repository uses GitHub Actions for continuous integration with automatic badge publishing:
+
+- **CI workflow** (`ci.yml`): Runs lint, type-check, and tests on every push/PR. On main branch, commits the regression badge on PASS.
+- **Nightly Sweep** (`nightly-sweep.yml`): Runs full hyperparameter sweep daily at 03:17 UTC. Commits badge on PASS.
+- **Regression badge** (`badges/regression_status.svg`): Auto-updated on main branch when regression passes. Shows PASS (green) or FAIL (red).
+- **Loop prevention**: Badge commits use `github-actions[bot]` author, which is excluded from triggering workflows via `if: github.actor != 'github-actions[bot]'`.
+- **PR behavior**: On pull requests, badge is uploaded as artifact only (no commit). Badge appears in Job Summary.
+- **First run handling**: If `badges/` directory or badge file doesn't exist, git will detect it as a new file and commit it.
+- **Badge unchanged**: Commit step is skipped if badge content is identical (no diff).
+- **Commit message**: Uses `[ci skip]` suffix as additional loop protection: `chore: update regression badge [ci skip]`.
+
+---
+
+## Reports (GitHub Pages)
+
+Regression reports are automatically published to GitHub Pages on successful nightly sweeps:
+
+- **Latest Report:** https://eyoair21.github.io/Trade_Bot/reports/latest/regression_report.html
+- **All Reports Index:** https://eyoair21.github.io/Trade_Bot/reports/
+- **Per-Run Reports:** https://eyoair21.github.io/Trade_Bot/reports/`<run-id>`/
+
+**Report contents:**
+- `regression_report.html` - Styled HTML report with per-metric verdicts
+- `regression_report.md` - Markdown version for GitHub rendering
+- `baseline_diff.json` - Computed deltas and pass/fail status
+- `provenance.json` - Data source tracking
+
+**Publishing behavior:**
+- **Main branch + PASS:** Reports are deployed to GitHub Pages under `/reports/<run-id>/`; `/reports/latest/` is updated to point to the newest run.
+- **Main branch + FAIL:** No Pages deployment; reports are available as workflow artifacts only.
+- **Pull requests:** No Pages deployment; reports uploaded as artifacts with preview note in Job Summary.
+
+**Setup (first time):**
+1. Run `scripts/dev/init_gh_pages.sh` to create the `gh-pages` branch
+2. Push the branch: `git push -u origin gh-pages`
+3. Enable GitHub Pages in repository settings: Settings → Pages → Source: `gh-pages` branch
+
+---
+
+## Integrity & Provenance
+
+Reports include integrity verification and provenance tracking for auditability:
+
+### SHA256 Integrity Hashes
+
+Each report directory includes `sha256sums.txt` for verifying file integrity:
+
+```bash
+# Verify report integrity
+cd /path/to/reports/12345-abc1234
+sha256sum -c sha256sums.txt
+
+# Generate hashes for a report directory
+python scripts/dev/generate_sha256sums.py --report-dir runs/sweeps/ci_smoke
+
+# Verify existing hashes
+python scripts/dev/generate_sha256sums.py --report-dir runs/sweeps/ci_smoke --verify
+```
+
+**Hashed files:**
+- `regression_report.html`
+- `regression_report.md`
+- `baseline_diff.json`
+- `provenance.json`
+- `plots/*.png` (if present)
+
+### Provenance Schema (v1)
+
+The `provenance.json` file documents data sources and build context:
+
+```json
+{
+  "schema_version": "1",
+  "git_sha": "abc1234",
+  "generated_utc": "2026-01-05T12:00:00+00:00",
+  "data_sources": {
+    "leaderboard": "leaderboard.csv",
+    "timings": "timings.csv"
+  },
+  "fallbacks_used": {
+    "leaderboard": false,
+    "timings": false
+  },
+  "notes": []
+}
+```
+
+When CSV files are unavailable, metrics are derived from `all_results.json` and `fallbacks_used` flags are set to `true`.
+
+### Report UX Features
+
+HTML reports include user experience enhancements:
+
+- **Dark/Light toggle:** Click "Toggle Dark/Light" button or use system preference
+- **Sticky header:** Navigation stays visible while scrolling
+- **Provenance footer:** Shows build SHA and timestamp at bottom of report
+- **Cache-busting:** Latest report links include query parameter for fresh loads
+
+### Prune Policy
+
+To manage storage, the deployment keeps the 50 most recent reports:
+
+- **Manifest trimming:** `update_pages_index.py` removes old entries from `manifest.json`
+- **Directory pruning:** With `--prune` flag, old report directories are deleted
+- **404 handling:** Custom 404.html directs users to available reports
+
+```bash
+# Manual pruning (dry run)
+python scripts/dev/update_pages_index.py \
+    --manifest public/reports/manifest.json \
+    --max-runs 50 \
+    --prune \
+    --dry-run
+```
+
+---
+
 ## Troubleshooting
 
 ### Windows Console Unicode Issues
@@ -976,6 +1375,73 @@ If the console crashes or displays garbled characters with Unicode/emoji:
 | Unicode errors on Windows | Use `--no-emoji` or set `TRADERBOT_NO_EMOJI=1` |
 | Tests fail with subprocess errors | Check that PYTHONPATH includes the project root |
 | Coverage below 70% | Run `pytest --cov-report=html` to identify untested code |
+| Regression check passes but CI shows failure | Check `epsilon_metric` and `epsilon_timing` values in budget |
+| Variance analysis shows all configs as flaky | Lower `--variance-threshold` or increase sample size |
+| HTML report not generated | Ensure `--html` flag is passed to compare command |
+| Trend plots not appearing | Install matplotlib: `pip install matplotlib` |
+| baseline_diff.json missing | Run `regress compare` first; always generated |
+| provenance.json missing data | Check that sweep outputs exist in current directory |
+
+### Regression Check Failures
+
+**"Metric regression detected":**
+- Compare current best metric vs baseline in `baseline_diff.json`
+- Check if drop exceeds `max_sharpe_drop` threshold
+- Consider tuning `epsilon_metric` for normal variance absorption
+
+**"Success rate below threshold":**
+- Review `all_results.json` for failed runs
+- Check error logs in individual run directories
+- May indicate broken configurations in sweep grid
+
+**"Timing P90 exceeded budget":**
+- Review `timings.csv` for slow runs
+- Consider increasing `max_p90_elapsed_s` or optimizing slow configs
+- Check CI runner load; `epsilon_timing` absorbs runner variance
+
+### Flaky Results
+
+If you see inconsistent pass/fail between runs:
+
+1. **Enable variance analysis:**
+   ```bash
+   python -m traderbot.cli.regress compare \
+       --reruns 3 \
+       --variance-threshold 0.10 \
+       ...
+   ```
+
+2. **Check variance_report.json:**
+   - High CV (>0.1) indicates non-determinism
+   - Review flagged configurations
+
+3. **Verify seed usage:**
+   - Ensure `--seed` is passed to walkforward
+   - Check that all random sources are seeded
+
+4. **Tune epsilons:**
+   ```yaml
+   epsilon_metric: 0.02   # Increase if small fluctuations cause failures
+   epsilon_timing: 5.0    # Increase for slow CI runners
+   ```
+
+### Matplotlib Issues
+
+If trend plots fail to generate:
+
+```bash
+# Install matplotlib
+pip install matplotlib
+
+# Test matplotlib backend
+python -c "import matplotlib; print(matplotlib.get_backend())"
+```
+
+For headless environments (CI):
+```python
+import matplotlib
+matplotlib.use('Agg')  # Non-interactive backend
+```
 
 ---
 

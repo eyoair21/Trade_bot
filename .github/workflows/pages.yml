@@ -1,25 +1,20 @@
 name: Pages
-
 on:
   workflow_dispatch:
   push:
     branches: [ main ]
-
 permissions:
   contents: read
   pages: write
   id-token: write
-
 concurrency:
   group: "pages"
   cancel-in-progress: true
-
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Prepare public folder
         run: |
           mkdir -p public/reports
@@ -33,12 +28,10 @@ HTML
           if [ -d reports ]; then
             rsync -a reports/ public/reports/ || true
           fi
-
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: public
-
   deploy:
     environment:
       name: github-pages

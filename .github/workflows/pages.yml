@@ -1,23 +1,30 @@
 name: Pages
+
 on:
-  workflow_dispatch:
   push:
     branches: [ main ]
+  workflow_dispatch:
+
 permissions:
   contents: read
   pages: write
   id-token: write
+
 concurrency:
   group: "pages"
   cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Prepare public folder
         run: |
+          set -e
           mkdir -p public/reports
+          # Ensure there is an index.html to deploy
           if [ ! -f public/index.html ]; then
             cat > public/index.html <<'HTML'
 <!doctype html><meta charset="utf-8"><title>TraderBot Reports</title>
@@ -25,19 +32,25 @@ jobs:
 <p><a href="./reports/">Open reports</a></p>
 HTML
           fi
+          # If reports/ exists, copy it into public/
           if [ -d reports ]; then
             rsync -a reports/ public/reports/ || true
           fi
-      - name: Upload artifact
+          # Prove we have deployable files
+          echo "Public tree:"
+          find public -type f | sed 's/^/ - /'
+
+      - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: public
+
   deploy:
+    needs: build
+    runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    needs: build
-    runs-on: ubuntu-latest
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4

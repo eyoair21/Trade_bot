@@ -87,3 +87,5 @@ def max_drawdown(equity_series: pd.Series) -> float:
 
     return float(max_dd_pct)
 
+
+

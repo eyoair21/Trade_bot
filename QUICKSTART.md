@@ -48,7 +48,33 @@ poetry run pytest tests/test_smoke.py -v
 
 All commands below use `poetry run` to execute within the virtual environment.
 
-#### 1️⃣ Generate Sample Data (if needed)
+#### 1️⃣ First Run (No Data)
+
+For a brand-new clone with no OHLCV parquet files, seed a tiny local universe and run a
+scan + paper demo:
+
+```powershell
+cd E:\Trade_Bot\traderbot
+
+# Seed ~120 trading days of synthetic OHLCV for AAPL, MSFT, NVDA, SPY, QQQ
+python scripts/seed_ohlcv.py
+
+# Run factor + sentiment scan and write alerts/reports
+tb scan --universe sp500 --strategy trend --top-n 25 --sector-cap 0.2
+
+# Start paper mode and log expected vs filled prices
+tb paper-start
+tb paper-sync
+tb paper-status
+
+# Optional: stage reports for static hosting
+New-Item -ItemType Directory -Force -Path public\reports | Out-Null
+Copy-Item -Path reports\* -Destination public\reports\ -Recurse -Force
+```
+
+After this, you can open `public\reports` in a browser (or via GitHub Pages) to inspect artifacts.
+
+#### 2️⃣ Generate Sample Data (if needed)
 
 ```powershell
 cd E:\Trade_Bot\traderbot
@@ -59,7 +85,7 @@ poetry run python scripts/make_sample_data.py
 
 You already have sample data, so you can skip this step!
 
-#### 2️⃣ Train PatchTST Model (CPU-only)
+#### 3️⃣ Train PatchTST Model (CPU-only)
 
 ```powershell
 # Basic training (20 epochs)
@@ -76,7 +102,7 @@ pip install torch
 - `models/patchtst.ts` - TorchScript model
 - `runs/<timestamp>/train_patchtst.json` - Training metrics
 
-#### 3️⃣ Walk-Forward Backtest (No Model)
+#### 4️⃣ Walk-Forward Backtest (No Model)
 
 ```powershell
 # Static universe mode
@@ -362,4 +388,6 @@ poetry run python -m traderbot.cli.walkforward --start-date 2023-01-10 --end-dat
 ```
 
 Happy trading! 🚀📈
+
+
 

@@ -1648,6 +1648,246 @@ matplotlib.use('Agg')  # Non-interactive backend
 
 ---
 
+## Universe Screening, Ranking & `tb` CLI
+
+Phase 6 adds a thin orchestration layer on top of the existing walk-forward engine:
+
+- **Named universes** defined in YAML under `universe/`:
+  - `universe/sp500.yaml` – S&P 500–style large-cap screen
+  - `universe/liquid_top1000.yaml` – market-wide liquidity screen
+- **Factor library** in `traderbot.features.factors`:
+  - Trend (20/50/200), momentum (3–12m with 1m skip), mean reversion (RSI2, z-score vs SMA20)
+  - Risk (ATR%) and cost (spread bps)
+- **Composite score & ranking** with configurable weights and sector caps
+- **High-level CLI** entrypoint `tb` (see `pyproject.toml`).
+
+### Picking a Universe & Ranking
+
+```bash
+# Install CLI entrypoint (editable install from repo root)
+pip install -e .
+
+# Rank S&P 500-style universe and keep top 25 names with 20% sector cap
+tb backtest \
+  --universe sp500 \
+  --strategy trend \
+  --top-n 25 \
+  --sector-cap 0.2
+```
+
+This will:
+
+- Screen candidates using the rules in `universe/sp500.yaml`:
+  - Price ≥ $5, ADV ≥ $20M, spread ≤ 0.2%, ≥ ~3y of history
+- Load OHLCV data from `DATA_DIR/OHLCV_DIR` (see `config.py`)
+- Compute standardized factor z-scores and a composite score with default weights:
+  - Trend 0.35, Momentum 0.25, MeanRev 0.20, Quality 0.10, Cost –0.10
+- Apply **sector caps** (default max 20% per sector if `sector_map.csv` is present)
+- Write selection metadata to `reports/backtests/last_selection.json`
+
+You can override weights via JSON:
+
+```bash
+tb backtest \
+  --universe liquid_top1000 \
+  --strategy trend \
+  --top-n 100 \
+  --sector-cap 0.2 \
+  --weights '{"trend":0.35,"momentum":0.25,"meanrev":0.20,"quality":0.10,"cost":-0.10}'
+```
+
+### Backtest Grid & Comparison
+
+When `--start-date/--end-date` are omitted, `tb backtest` runs a small grid over:
+
+- Periods: `2020-01-01..2022-12-31`, `2023`, `2024`
+- Selected universe (e.g., `sp500`) and strategy label (`trend`, `meanrev`, `hybrid`)
+
+Artifacts are written under `reports/backtests/`:
+
+- Per-run:
+  - `*/results.json`, `*/equity_curve.csv`, `*/metrics.json`
+- Aggregated:
+  - `reports/backtests/comparison.csv` – one row per configuration
+  - `reports/backtests/summary.md` – top-3 configs ranked by Sharpe
+
+View a ranked table across runs:
+
+```bash
+tb compare
+```
+
+This prints a Sharpe-ranked table of universes/strategies/periods from `comparison.csv`.
+
+### Paper Trading (Dry-Run Wiring)
+
+The `tb` CLI includes a simple dry-run paper “broker” that reads the last backtest selection and
+logs expected vs. filled prices using a configurable slippage model (no real orders are sent):
+
+```bash
+# 1. Run a backtest to generate universe selection + reports
+tb backtest --universe sp500 --strategy trend --top-n 25 --sector-cap 0.2
+
+# 2. Initialize paper account from latest selection
+tb paper-start
+
+# 3. Simulate a sync cycle (uses latest OHLCV close and EXECUTION_SLIPPAGE_BPS)
+tb paper-sync
+
+# 4. Inspect paper account status
+tb paper-status
+```
+
+Paper-trade state is stored under `reports/backtests/paper_state.json` and includes:
+
+- `account` – paper equity/cash snapshot
+- `universe` – symbols from the last selection
+- `fills` – synthetic fills with `expected_price`, `filled_price`, and `slippage_bps`
+
+This wiring is intentionally **secret-free** and can be extended later to hit a real
+broker (e.g., Alpaca) by swapping out the backing implementation.
+
+---
+
+## Phase 6 – News, Gaps, Alerts, Daily Jobs, Paper v1
+
+Phase 6 adds news-based sentiment analysis, gap detection, automated daily scans, and a deterministic paper trading engine.
+
+### First Run (No Data)
+
+If you have a fresh clone with no OHLCV parquet files, you can seed minimal data and run a full
+scan + paper demo with:
+
+```bash
+python scripts/seed_ohlcv.py
+
+tb scan --universe sp500 --strategy trend --top-n 25 --sector-cap 0.2
+
+tb paper-start
+tb paper-sync
+tb paper-status
+
+# Publish reports locally (Linux/macOS)
+rsync -a reports/ public/reports/
+```
+
+On Windows PowerShell, the last step can be approximated with:
+
+```powershell
+New-Item -ItemType Directory -Force -Path public\reports | Out-Null
+Copy-Item -Path reports\* -Destination public\reports\ -Recurse -Force
+```
+
+### Quick Start (No API Keys Required)
+
+```bash
+# Install with editable mode
+pip install -e .
+
+# Run the full daily pipeline
+# On Linux/macOS:
+./scripts/run_daily_scan.sh
+
+# On Windows (PowerShell):
+.\scripts\run_daily_scan.ps1
+```
+
+The pipeline runs these steps automatically:
+1. **news-pull** – Fetch headlines from public RSS feeds (Yahoo Finance, MarketWatch, CNBC, Reuters, SEC EDGAR)
+2. **news-parse** – Extract tickers and deduplicate content
+3. **news-score** – Apply lexicon-based sentiment with time decay
+4. **sector-digest** – Aggregate sentiment by sector
+5. **scan** – Generate opportunity rankings with all factors
+
+### CLI Commands
+
+```bash
+# Individual news pipeline steps
+tb news-pull                    # Fetch from RSS feeds
+tb news-parse                   # Parse and extract tickers
+tb news-score                   # Score sentiment with decay
+tb sector-digest --window 1d    # Build sector heatmap
+
+# Run opportunity scan with all factors
+tb scan --universe sp500 --top-n 25 --sector-cap 0.2
+```
+
+### Artifacts Location
+
+All outputs are written to `public/reports/` for GitHub Pages publishing:
+
+```
+public/reports/
+├── YYYY-MM-DD/
+│   ├── opportunities.csv       # Ranked opportunities with scores
+│   ├── alerts.html            # Interactive HTML preview
+│   ├── alerts.md              # Markdown summary
+│   └── sector_sentiment.csv   # Sector aggregates
+└── latest/ -> YYYY-MM-DD/     # Symlink to most recent
+```
+
+### Factor Weights
+
+The composite score combines multiple factors:
+
+| Factor   | Weight | Description                              |
+|----------|--------|------------------------------------------|
+| Trend    | 0.35   | 20/50/200 SMA alignment                  |
+| Momentum | 0.25   | 3-12 month returns (1m skip)             |
+| MeanRev  | 0.15   | RSI2 extremes, z-score vs SMA20          |
+| Sentiment| 0.10   | News sentiment with 6-hour half-life     |
+| Sector   | 0.05   | Sector-level sentiment z-score           |
+| Gap      | 0.10   | Gap regime (CONT/REVERT/NEUTRAL)         |
+| Cost     | -0.10  | Spread penalty                           |
+
+### Gap Detection
+
+Gap regimes are classified based on gap size relative to ATR:
+
+- **CONTINUATION (CONT)**: `|gap| ≤ 0.5×ATR` or gap aligned with prior trend
+- **REVERSION (REVERT)**: `|gap| > 1.0×ATR` against prior trend
+- **NEUTRAL**: Intermediate cases
+
+### Paper Trading Engine
+
+The paper engine provides deterministic simulation:
+
+```bash
+# Start paper trading session
+tb paper-start --capital 100000
+
+# Submit orders (simulated)
+tb paper-sync
+
+# View positions and PnL
+tb paper-status
+```
+
+Features:
+- **Volatility-targeted sizing**: Position weights based on `target_vol / asset_vol`
+- **Deterministic fills**: Configurable slippage (default 10 bps) and costs (2 bps)
+- **Equity tracking**: CSV export of equity curve and fills
+
+### Options Module (Placeholder)
+
+Data structures are defined for future options integration:
+
+```python
+from traderbot.options import OptionQuote, OptionChainSummary, IVSnapshot
+
+# Stubs ready for Polygon/Tradier API integration
+chain = load_option_chain_sample("AAPL")
+metrics = compute_basic_metrics(chain)
+```
+
+### Legal Note
+
+This software is for **educational and paper trading purposes only**. No real money is at risk.
+The authors are not financial advisors. Past performance does not guarantee future results.
+Always do your own research before making investment decisions.
+
+---
+
 ## License
 
 MIT License - See LICENSE file for details.

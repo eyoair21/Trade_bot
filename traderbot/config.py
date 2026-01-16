@@ -265,6 +265,7 @@ class Config:
     calibration: CalibrationConfig
     random_seed: int
     runs_dir: Path
+    reports_dir: Path
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -282,6 +283,7 @@ class Config:
             calibration=CalibrationConfig.from_env(),
             random_seed=_get_env_int("RANDOM_SEED", 42),
             runs_dir=Path(_get_env_str("RUNS_DIR", "./runs")),
+            reports_dir=Path(_get_env_str("REPORTS_DIR", "./reports")),
         )
 
 

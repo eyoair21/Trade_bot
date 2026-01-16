@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TraderBot Alert Preview - 2026-01-16</title>
+    <style>
+        :root {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8f9fa;
+            --text-primary: #212529;
+            --text-secondary: #6c757d;
+            --border-color: #dee2e6;
+            --accent-green: #28a745;
+            --accent-red: #dc3545;
+            --accent-blue: #007bff;
+        }
+        [data-theme="dark"] {
+            --bg-primary: #1a1a2e;
+            --bg-secondary: #16213e;
+            --text-primary: #e4e4e7;
+            --text-secondary: #a1a1aa;
+            --border-color: #3f3f46;
+            --accent-green: #22c55e;
+            --accent-red: #ef4444;
+            --accent-blue: #3b82f6;
+        }
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            margin: 0;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 2px solid var(--border-color);
+        }
+        h1 { margin: 0; font-size: 24px; }
+        .date { color: var(--text-secondary); }
+        .theme-toggle {
+            padding: 8px 16px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            cursor: pointer;
+        }
+        .section {
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+        .section h2 {
+            margin-top: 0;
+            font-size: 18px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 12px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        th, td {
+            padding: 10px 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+        th {
+            background: var(--bg-primary);
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+        }
+        tr:hover { background: var(--bg-primary); }
+        .positive { color: var(--accent-green); }
+        .negative { color: var(--accent-red); }
+        .neutral { color: var(--text-secondary); }
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .badge-cont { background: #d4edda; color: #155724; }
+        .badge-revert { background: #f8d7da; color: #721c24; }
+        .badge-neutral { background: #e2e3e5; color: #383d41; }
+        [data-theme="dark"] .badge-cont { background: #064e3b; color: #a7f3d0; }
+        [data-theme="dark"] .badge-revert { background: #7f1d1d; color: #fecaca; }
+        [data-theme="dark"] .badge-neutral { background: #374151; color: #d1d5db; }
+        .rationale {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+        .rationale span {
+            display: inline-block;
+            margin-right: 8px;
+        }
+        .links {
+            margin-top: 24px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border-color);
+        }
+        .links a {
+            color: var(--accent-blue);
+            margin-right: 16px;
+        }
+        footer {
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 12px;
+            margin-top: 40px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div>
+                <h1>TraderBot Alert Preview</h1>
+                <div class="date">Generated: 2026-01-16 20:56 UTC</div>
+            </div>
+            <button class="theme-toggle" onclick="toggleTheme()">Toggle Theme</button>
+        </header>
+
+        <section class="section">
+            <h2>Sector Heat Map</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Sector</th>
+                        <th>Items</th>
+                        <th>Mean Sentiment</th>
+                        <th>P95 Abs</th>
+                        <th>Most Recent</th>
+                        <th>+/-/~</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    
+                </tbody>
+            </table>
+        </section>
+
+        <section class="section">
+            <h2>Top 2 Opportunities</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Rank</th>
+                        <th>Symbol</th>
+                        <th>Score</th>
+                        <th>Trend</th>
+                        <th>Momentum</th>
+                        <th>Sentiment</th>
+                        <th>Gap</th>
+                        <th>Rationale</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    
+                    <tr>
+                        <td>1</td>
+                        <td><strong>QQQ</strong></td>
+                        <td>0.329</td>
+                        <td class="positive">
+                            0.33
+                        </td>
+                        <td class="positive">
+                            1.00
+                        </td>
+                        <td class="neutral">
+                            0.00
+                        </td>
+                        <td>
+                            <span class="badge badge-neutral">NEUTRAL</span>
+                            0.12
+                        </td>
+                        <td class="rationale">
+                            
+                            <span>high_momentum</span>
+                            
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <td>2</td>
+                        <td><strong>SPY</strong></td>
+                        <td>-0.317</td>
+                        <td class="negative">
+                            -0.33
+                        </td>
+                        <td class="negative">
+                            -1.00
+                        </td>
+                        <td class="neutral">
+                            0.00
+                        </td>
+                        <td>
+                            <span class="badge badge-cont">CONT</span>
+                            -0.00
+                        </td>
+                        <td class="rationale">
+                            
+                            <span>gap_continuation</span>
+                            
+                        </td>
+                    </tr>
+                    
+                </tbody>
+            </table>
+        </section>
+
+        <div class="links">
+            <a href="opportunities.csv">Download CSV</a>
+            <a href="../sector_sentiment.csv">Sector Data</a>
+            <a href="../../latest/regression_report.html">Latest Regression</a>
+        </div>
+
+        <footer>
+            <p>TraderBot v0.6.6-dev &bull; Paper Trading Only &bull; Not Financial Advice</p>
+        </footer>
+    </div>
+
+    <script>
+        function toggleTheme() {
+            const html = document.documentElement;
+            const current = html.getAttribute('data-theme');
+            html.setAttribute('data-theme', current === 'dark' ? 'light' : 'dark');
+        }
+    </script>
+</body>
+</html>

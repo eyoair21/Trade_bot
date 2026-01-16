@@ -1,0 +1,2 @@
+sector,item_count,mean_sentiment,p95_abs_sentiment,most_recent_minutes,positive_count,negative_count,neutral_count
+UNKNOWN,93,0.198,0.9256,5.9,37,11,45

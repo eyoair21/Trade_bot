@@ -1,0 +1,10 @@
+{
+  "universe": "sp500",
+  "strategy": "trend",
+  "top_n": 25,
+  "sector_cap": 0.2,
+  "symbols": [
+    "QQQ",
+    "SPY"
+  ]
+}

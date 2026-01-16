@@ -1,0 +1,27 @@
+# TraderBot RSS News Sources
+# Public finance RSS feeds - no API keys required
+# Format: one URL per line, comments start with #
+
+# Yahoo Finance
+https://finance.yahoo.com/news/rssindex
+https://feeds.finance.yahoo.com/rss/2.0/headline?s=^GSPC&region=US&lang=en-US
+
+# MarketWatch
+https://feeds.marketwatch.com/marketwatch/topstories/
+https://feeds.marketwatch.com/marketwatch/marketpulse/
+
+# CNBC
+https://www.cnbc.com/id/100003114/device/rss/rss.html
+https://www.cnbc.com/id/10001147/device/rss/rss.html
+
+# Reuters Business (public feed)
+https://www.reutersagency.com/feed/?best-topics=business-finance&post_type=best
+
+# SEC EDGAR 8-K filings (public RSS)
+https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type=8-K&company=&dateb=&owner=include&count=100&output=atom
+
+# PR Newswire - Business/Finance
+https://www.prnewswire.com/rss/financial-services-latest-news/financial-services-latest-news-list.rss
+
+# GlobeNewswire
+https://www.globenewswire.com/RssFeed/subjectcode/25-Mergers%20and%20Acquisitions/feedTitle/GlobeNewswire%20-%20Mergers%20and%20Acquisitions.xml

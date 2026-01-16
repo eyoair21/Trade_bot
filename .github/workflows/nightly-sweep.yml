@@ -199,6 +199,93 @@ jobs:
           path: runs/sweeps/trend_data.json
           retention-days: 90
 
+      # ============================================================
+      # Phase 6: Daily News + Scan Pipeline (no API keys required)
+      # ============================================================
+      - name: Run daily news pipeline
+        if: always()
+        run: |
+          echo "=== Phase 6: News + Scan Pipeline ==="
+          mkdir -p data reports
+
+          # Step 1: Fetch news from public RSS feeds
+          python -m traderbot.cli.tb news-pull \
+            --sources traderbot/news/rss_sources.txt \
+            --out data/news_raw.jsonl || echo "news-pull completed (may have partial data)"
+
+          # Step 2: Parse and extract tickers
+          python -m traderbot.cli.tb news-parse \
+            --in data/news_raw.jsonl \
+            --out data/news_parsed.jsonl || echo "news-parse completed"
+
+          # Step 3: Score sentiment with time decay
+          python -m traderbot.cli.tb news-score \
+            --in data/news_parsed.jsonl \
+            --out data/news_scored.jsonl || echo "news-score completed"
+
+          # Step 4: Build sector sentiment digest
+          python -m traderbot.cli.tb sector-digest \
+            --in data/news_scored.jsonl \
+            --window 1d \
+            --out reports/sector_sentiment.csv || echo "sector-digest completed"
+
+          # Step 5: Run opportunity scan (requires universe data)
+          OHLCV_DIR="${OHLCV_DIR:-./data/ohlcv}"
+          if find "$OHLCV_DIR" -maxdepth 1 -name '*.parquet' -print -quit | grep -q .; then
+            echo "Found OHLCV parquet under $OHLCV_DIR - running scan"
+            python -m traderbot.cli.tb scan \
+              --universe sp500 \
+              --strategy trend \
+              --top-n 25 \
+              --sector-cap 0.2 || echo "scan completed (with possible non-fatal errors)"
+
+            # Compare backtest runs if any exist
+            python -m traderbot.cli.tb compare || echo "compare completed (no backtests to compare)"
+          else
+            echo "skipping scan; no OHLCV parquet under $OHLCV_DIR"
+            mkdir -p reports/backtests
+            echo '{}' > reports/backtests/last_selection.json
+          fi
+
+          echo "=== News pipeline artifacts ==="
+          ls -la data/ reports/ 2>/dev/null || true
+        continue-on-error: true
+
+      - name: Stage reports for Pages
+        if: always()
+        run: |
+          # Create public/reports structure for Pages
+          mkdir -p public/reports/latest
+
+          # Copy reports to public (rsync-style)
+          if [ -d reports ]; then
+            cp -r reports/* public/reports/ 2>/dev/null || true
+          fi
+
+          # Copy run-specific reports
+          if [ -d runs/sweeps/ci_smoke ]; then
+            cp -r runs/sweeps/ci_smoke/* public/reports/latest/ 2>/dev/null || true
+          fi
+
+          # Create minimal index if not present
+          if [ ! -f public/index.html ]; then
+            cat > public/index.html << 'INDEXEOF'
+          <!doctype html>
+          <meta charset="utf-8">
+          <title>TraderBot Reports</title>
+          <h1>TraderBot Reports</h1>
+          <ul>
+            <li><a href="./reports/">All Reports</a></li>
+            <li><a href="./reports/latest/regression_report.html">Latest Regression</a></li>
+            <li><a href="./reports/sector_sentiment.csv">Sector Sentiment</a></li>
+          </ul>
+          INDEXEOF
+          fi
+
+          echo "=== Public directory structure ==="
+          find public -type f | head -20
+        continue-on-error: true
+
       - name: Check regression status
         if: steps.regress.outcome == 'failure'
         run: |

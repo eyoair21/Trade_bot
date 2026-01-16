@@ -1,0 +1,26 @@
+{
+  "account": {
+    "equity": 100000.0,
+    "cash": 100000.0
+  },
+  "universe": [
+    "QQQ",
+    "SPY"
+  ],
+  "open_positions": {},
+  "orders": [],
+  "fills": [
+    {
+      "symbol": "QQQ",
+      "expected_price": 113.96617635067615,
+      "filled_price": 114.02315943885148,
+      "slippage_bps": 5.0
+    },
+    {
+      "symbol": "SPY",
+      "expected_price": 131.56767888756886,
+      "filled_price": 131.63346272701264,
+      "slippage_bps": 5.0
+    }
+  ]
+}

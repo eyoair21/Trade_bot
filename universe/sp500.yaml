@@ -1,0 +1,18 @@
+name: sp500
+description: >
+  S&P 500 style universe with basic liquidity and quality screens.
+  This file defines the screening rules; actual constituents are
+  inferred from available symbols in the local OHLCV directory.
+
+base:
+  # Optional explicit symbol list; if empty, all available symbols
+  # in the data directory are candidates.
+  symbols: []
+
+screens:
+  min_price: 5.0              # Price >= $5
+  min_adv: 20000000.0         # ADV >= $20,000,000 (approx close * volume)
+  max_spread_pct: 0.002       # Spread <= 0.2% (20 bps)
+  min_history_days: 756       # ~3 years of trading days
+
+

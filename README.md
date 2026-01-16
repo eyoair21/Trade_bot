@@ -1888,6 +1888,61 @@ Always do your own research before making investment decisions.
 
 ---
 
+## Publishing (GitHub Pages)
+
+Reports are automatically published to GitHub Pages on push to `main` or via manual workflow dispatch.
+
+### Prerequisites
+
+Ensure the following repository settings are configured:
+
+1. **Settings → Actions → Workflow permissions**: Set to "Read and write permissions"
+2. **Settings → Pages → Source**: Set to "GitHub Actions"
+3. **Settings → Environments → github-pages** (if required by org): Ensure `main` branch is allowed
+
+### Workflow
+
+The `Pages` workflow (`.github/workflows/pages.yml`) runs automatically on:
+- Push to `main` branch
+- Manual dispatch via Actions UI
+
+The workflow:
+1. **Build job**: Prepares `public/` directory with `index.html` and copies `reports/` into `public/reports/`
+2. **Deploy job**: Deploys the `public/` artifact to GitHub Pages
+
+### Artifacts
+
+The workflow expects artifacts in the `public/` directory:
+- `public/index.html` - Landing page (auto-created if missing)
+- `public/reports/` - Report artifacts (copied from `reports/` if present)
+
+### Smoke Test
+
+After deployment completes (typically 2-5 minutes), verify Pages is live:
+
+```powershell
+$base = "https://eyoair21.github.io/Trade_bot"
+$eps  = @("", "reports/")
+foreach ($e in $eps) {
+  $u = "$base/$e" -replace "//","/"
+  try { $c = (Invoke-WebRequest -UseBasicParsing -Uri $u -Method Head -TimeoutSec 20).StatusCode.value__ }
+  catch { $c = "ERR" }
+  "$u -> $c"
+}
+```
+
+**Expected**: Both endpoints return `200`.
+
+### Troubleshooting
+
+If Pages doesn't deploy:
+1. Check Actions workflow: https://github.com/eyoair21/Trade_Bot/actions
+2. Review "Pages" workflow logs for errors
+3. Verify `public/` directory contains files (check "Upload artifact" step)
+4. Ensure `github-pages` environment exists and allows `main` branch deployments
+
+---
+
 ## License
 
 MIT License - See LICENSE file for details.

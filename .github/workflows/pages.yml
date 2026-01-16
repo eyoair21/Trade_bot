@@ -1,0 +1,54 @@
+name: Pages
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Ensure public/ exists (index + reports). If your nightly already copies reports/ → public/reports/,
+      # this step will just create an index if missing.
+      - name: Prepare public folder
+        run: |
+          mkdir -p public/reports
+          if [ ! -f public/index.html ]; then
+            cat > public/index.html <<'HTML'
+<!doctype html><meta charset="utf-8"><title>TraderBot Reports</title>
+<h1>TraderBot Reports</h1>
+<p><a href="./reports/">Open reports</a></p>
+HTML
+          fi
+          # Optionally copy any current reports into public/
+          if [ -d reports ]; then
+            rsync -a reports/ public/reports/ || true
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+

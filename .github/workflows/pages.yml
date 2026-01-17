@@ -24,7 +24,6 @@ jobs:
         run: |
           set -e
           mkdir -p public/reports
-          # Ensure there is an index.html to deploy
           if [ ! -f public/index.html ]; then
             cat > public/index.html <<'HTML'
 <!doctype html><meta charset="utf-8"><title>TraderBot Reports</title>
@@ -32,13 +31,10 @@ jobs:
 <p><a href="./reports/">Open reports</a></p>
 HTML
           fi
-          # If reports/ exists, copy it into public/
           if [ -d reports ]; then
             rsync -a reports/ public/reports/ || true
           fi
-          # Prove we have deployable files
-          echo "Public tree:"
-          find public -type f | sed 's/^/ - /'
+          echo "Public tree:"; find public -type f | sed "s/^/ - /"
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

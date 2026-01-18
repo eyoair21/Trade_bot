@@ -536,7 +536,7 @@ def generate_index_html(
     <meta property="og:title" content="TraderBot Regression Reports">
     <meta property="og:description" content="Automated regression test reports for TraderBot trading system">
     <meta property="og:type" content="website">
-    <meta property="og:url" content="https://eyoair21.github.io/Trade_bot/reports/">
+    <meta property="og:url" content="https://eyoair21.github.io/Trade_Bot/reports/">
     <meta property="og:site_name" content="TraderBot">
 
     <!-- Twitter Card -->

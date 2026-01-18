@@ -20,10 +20,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Required by deploy-pages@v4
+      - uses: actions/configure-pages@v5
+
       - name: Prepare public folder
         run: |
           set -e
           mkdir -p public/reports
+          # If reports/ exists in repo, stage it
+          if [ -d reports ]; then
+            rsync -a reports/ public/reports/ || true
+          fi
+          # Ensure an index.html exists
           if [ ! -f public/index.html ]; then
             cat > public/index.html <<'HTML'
 <!doctype html><meta charset="utf-8"><title>TraderBot Reports</title>
@@ -31,10 +39,8 @@ jobs:
 <p><a href="./reports/">Open reports</a></p>
 HTML
           fi
-          if [ -d reports ]; then
-            rsync -a reports/ public/reports/ || true
-          fi
-          echo "Public tree:"; find public -type f | sed "s/^/ - /"
+          echo "Public tree:"
+          find public -maxdepth 2 -type f | sed 's/^/ - /'
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

@@ -5,7 +5,7 @@ the root, latest report, and 404 handling are wired correctly:
 
 ```powershell
 # Basic Pages smoke test
-$base = "https://eyoair21.github.io/Trade_bot"
+$base = "https://eyoair21.github.io/Trade_Bot"
 
 # 1) Root should return HTTP 200
 (Invoke-WebRequest "$base/" -UseBasicParsing).StatusCode

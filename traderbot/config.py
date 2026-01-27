@@ -250,6 +250,24 @@ class CalibrationConfig:
 
 
 @dataclass(frozen=True)
+class RewardConfig:
+    """Reward function weights configuration."""
+
+    lambda_dd: float  # Drawdown penalty weight
+    tau_turnover: float  # Turnover penalty weight
+    kappa_breach: float  # Risk breach penalty weight
+
+    @classmethod
+    def from_env(cls) -> "RewardConfig":
+        """Create RewardConfig from environment variables."""
+        return cls(
+            lambda_dd=_get_env_float("REWARD_LAMBDA_DD", 0.2),
+            tau_turnover=_get_env_float("REWARD_TAU_TURNOVER", 0.001),
+            kappa_breach=_get_env_float("REWARD_KAPPA_BREACH", 0.5),
+        )
+
+
+@dataclass(frozen=True)
 class Config:
     """Main configuration container."""
 
@@ -263,9 +281,9 @@ class Config:
     execution: ExecutionConfig
     sizing: SizingConfig
     calibration: CalibrationConfig
+    reward: RewardConfig
     random_seed: int
     runs_dir: Path
-    reports_dir: Path
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -281,9 +299,9 @@ class Config:
             execution=ExecutionConfig.from_env(),
             sizing=SizingConfig.from_env(),
             calibration=CalibrationConfig.from_env(),
+            reward=RewardConfig.from_env(),
             random_seed=_get_env_int("RANDOM_SEED", 42),
             runs_dir=Path(_get_env_str("RUNS_DIR", "./runs")),
-            reports_dir=Path(_get_env_str("REPORTS_DIR", "./reports")),
         )
 
 

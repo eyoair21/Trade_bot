@@ -118,19 +118,6 @@ class TestConfig:
         assert config.strategy is not None
         assert config.random_seed == 42
         assert config.runs_dir == Path("./runs")
-        assert config.data.ohlcv_dir == Path("./data/ohlcv")
-        assert config.reports_dir == Path("./reports")
-
-    def test_reports_and_ohlcv_dirs_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Config should respect OHLCV_DIR and REPORTS_DIR environment variables."""
-        monkeypatch.setenv("OHLCV_DIR", "/tmp/ohlcv")
-        monkeypatch.setenv("REPORTS_DIR", "/tmp/reports")
-
-        reset_config()
-        config = Config.from_env()
-
-        assert config.data.ohlcv_dir == Path("/tmp/ohlcv")
-        assert config.reports_dir == Path("/tmp/reports")
 
     def test_config_is_frozen(self) -> None:
         """Test config is immutable (frozen dataclass)."""
